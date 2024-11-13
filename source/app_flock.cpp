@@ -148,7 +148,8 @@ public:
 	// Rendering
 	void			SelectBird (float x, float y);
 	void			Graph ( int id, float y, Vec4F clr, Vec2F scal );
-	void			VisualizeSelectedBird ();	
+	void			VisualizeSelectedBird ();
+	void			VisualizePredators ();
 	void			DebugBird ( int id, std::string msg );
 	void			CameraToBird ( int b );
 	void			CameraToCockpit( int b );
@@ -2322,6 +2323,29 @@ void Flock2::Graph ( int id, float y, Vec4F clr, Vec2F scal)
 	g->y[ int(g->x) ] = y;
 }
 
+void Flock2::VisualizePredators ()
+{
+	Predator* p;
+	char msg[1024];
+	Vec4F tc (1,1,1,1);
+	
+	// predator information
+	for (int n = 0; n < m_Predators.GetNumElem(FPREDATOR); n++) {
+		p = (Predator*)m_Predators.GetElem(FPREDATOR, n);
+
+		if(p->currentState == ATTACK)
+			sprintf ( msg, "predator %d currentState = ATTACK", n );
+		else if(p->currentState == HOVER)
+			sprintf ( msg, "predator %d currentState = HOVER", n );
+		else if(p->currentState == FOLLOW)
+			sprintf ( msg, "predator %d currentState = FOLLOW", n );
+		else
+			sprintf ( msg, "predator %d currentState is INVALID", n );
+		drawText ( Vec2F(10, 30 + 20*n), msg, tc );
+	}
+	
+}
+
 void Flock2::VisualizeSelectedBird ()
 {
 	// selection is bird ID
@@ -2986,6 +3010,9 @@ void Flock2::display ()
 
 		// Visualize selected bird
 		VisualizeSelectedBird ();
+		
+		// Visualize predators
+		VisualizePredators ();
 
 		setTextSz ( 16, 0 );	
 
