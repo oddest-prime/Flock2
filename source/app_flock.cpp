@@ -156,7 +156,7 @@ public:
 	void			CameraToCentroid ();
 	void			drawBackground();
 	void			drawGrid( Vec4F clr );
-	int				LoadMesh ( int i, std::string name, float scale=1);
+	void			LoadMesh ( int i, std::string name, float scale=1);
 	void			SketchMesh ( int i );
 	void			RenderBirdsWithMesh( int i );
 	void			RenderBirdsWithDart();
@@ -2676,7 +2676,7 @@ bool Flock2::init ()
 }
 
 
-int Flock2::LoadMesh (int i, std::string name, float scale)
+void Flock2::LoadMesh (int i, std::string name, float scale)
 {	
 	// Allocate mesh object
 	m_obj[i].mesh = new MeshX;
