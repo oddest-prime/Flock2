@@ -2173,14 +2173,15 @@ void Flock2::Advance_pred()
 
 		// Roll - Control input
 		// - orient the body by roll
-		ctrlq.fromAngleAxis(p->ang_accel.x * m_Params.reaction_speed, fwd);
+		float rx = m_Params.DT*1000.0f / m_Params.reaction_speed;
+		ctrlq.fromAngleAxis(p->ang_accel.x * rx, fwd);
 		p->orient *= ctrlq;	p->orient.normalize();
 
 		// Pitch & Yaw - Control inputs
 		// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs				
-		ctrlq.fromAngleAxis(p->ang_accel.z * m_Params.reaction_speed, up * -1.f);
+		ctrlq.fromAngleAxis(p->ang_accel.z * rx, up * -1.f);
 		vaxis *= ctrlq; vaxis.Normalize();
-		ctrlq.fromAngleAxis(p->ang_accel.y * m_Params.reaction_speed, right);
+		ctrlq.fromAngleAxis(p->ang_accel.y * rx, right);
 		vaxis *= ctrlq; vaxis.Normalize();	
 
 		// Adjust velocity vector		
