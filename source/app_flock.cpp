@@ -368,9 +368,9 @@ void Flock2::DefaultParams ()
 	// SI units:
 	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)	
 	//
-	m_Params.num_birds = 10000;
-	m_Params.num_predators = 0;
-  m_Params.neighbors = 7;
+	m_Params.num_birds = 100; // 	10000
+	m_Params.num_predators = 1; //	0
+	m_Params.neighbors = 7;
 
 	m_Params.steps = 2;
 	m_Params.DT = 0.005;							// timestep (sec), .005 = 5 msec = 200 hz
