@@ -42,7 +42,9 @@
 		typedef float4			f4;
 		typedef int3			i3;	
 		typedef quat4			q4;		
-		#define ALIGN(n)		__align__(n)		// NVCC
+		#ifndef ALIGN
+			#define ALIGN(n)		__align__(n)		// NVCC
+  		#endif
 	#else
 		#include "quaternion.h"
 		#include "vec.h"		
@@ -50,10 +52,12 @@
 		typedef Vec3F			f3;		
 		typedef Vec3I			i3;
 		typedef Quaternion		q4;
-		#ifdef _WIN32
-   		  #define ALIGN(n)		__declspec(align(n))	// MSVC
-   		#else
-  		  #define ALIGN(n)  __attribute__((aligned(n)))		// GCC
+		#ifndef ALIGN
+			#ifdef _WIN32
+	   		  #define ALIGN(n)		__declspec(align(n))	// MSVC
+	   		#else
+	  		  #define ALIGN(n)  __attribute__((aligned(n)))		// GCC
+	  		#endif
   		#endif
 	#endif
 
