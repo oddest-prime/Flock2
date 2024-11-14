@@ -381,41 +381,41 @@ void Flock2::DefaultParams ()
 	m_Params.neighbors = 7;
 
 	m_Params.steps = 2;
-	m_Params.DT = 0.005;							// timestep (sec), .005 = 5 msec = 200 hz
+	m_Params.DT = 0.005;						// timestep (sec), .005 = 5 msec = 200 hz
 
-	m_Params.mass =	0.08;							// bird mass (kg) - starling
-	m_Params.power = 0.2173;							// 100% power (in joules)
+	m_Params.mass =	0.08;						// bird mass (kg) - starling
+	m_Params.power = 0.2173;					// 100% power (in joules)
 	m_Params.min_speed = 5;						// min speed (m/s)		// Demsar2014
 	m_Params.max_speed = 18;					// max speed (m/s)		// Demsar2014
 	m_Params.min_power = -20;					// min power (N)
 	m_Params.max_power = 20;					// max power (N)
-	m_Params.wind =	Vec3F(0,0,0);			// wind direction & strength
-	m_Params.fov = 240;								// bird field-of-view (degrees), max = 360 deg (180 left & right)
+	m_Params.wind =	Vec3F(0,0,0);				// wind direction & strength
+	m_Params.fov = 240;							// bird field-of-view (degrees), max = 360 deg (180 left & right)
 
 	// social factors
-	m_Params.boundary_cnt = 120;					// border width (# birds)
-	m_Params.boundary_amt = 0.40f;			// border steering amount (keep <0.1)
+	m_Params.boundary_cnt = 120;				// border width (# birds)
+	m_Params.boundary_amt = 0.40f;				// border steering amount (keep <0.1)
 
 	//-- disable border
 	//	m_Params.border_cnt = 0;
 	//		m_Params.border_amt = 0.0f;
 
-	m_Params.avoid_angular_amt= 0.01f;	// bird angular avoidance amount
-	m_Params.avoid_power_amt =	0.00f;	// power avoidance amount (N)
-	m_Params.avoid_power_ctr =	3;			// power avoidance center (N)
+	m_Params.avoid_angular_amt= 0.01f;			// bird angular avoidance amount
+	m_Params.avoid_power_amt =	0.00f;			// power avoidance amount (N)
+	m_Params.avoid_power_ctr =	3;				// power avoidance center (N)
 	m_Params.align_amt = 0.400f;				// bird alignment amount
-	m_Params.cohesion_amt =	0.001f;			// bird cohesion amount
+	m_Params.cohesion_amt =	0.001f;				// bird cohesion amount
 
 	// flight parameters
 	m_Params.wing_area = 0.0224;
-	m_Params.lift_factor = 0.5714;			// lift factor
-	m_Params.drag_factor = 0.1731;			// drag factor
+	m_Params.lift_factor = 0.5714;				// lift factor
+	m_Params.drag_factor = 0.1731;				// drag factor
 	m_Params.safe_radius = 2.0;					// radius of avoidance (m)
 	m_Params.pitch_decay = 0.95;				// pitch decay (return to level flight)
-	m_Params.pitch_min = -40;						// min pitch (degrees)
-	m_Params.pitch_max = 20;						// max pitch (degrees)
-	m_Params.reaction_speed = 4000;			// reaction speed (millisec)
-	m_Params.dynamic_stability = 0.8f;	// dyanmic stability factor
+	m_Params.pitch_min = -40;					// min pitch (degrees)
+	m_Params.pitch_max = 20;					// max pitch (degrees)
+	m_Params.reaction_speed = 4000;				// reaction speed (millisec)
+	m_Params.dynamic_stability = 0.8f;			// dyanmic stability factor
 	m_Params.air_density = 1.225;				// air density (kg/m^3)
 	m_Params.gravity = Vec3F(0, -9.8, 0);		// gravity (m/s^2)
 	m_Params.front_area = 0.1f;					// section area of bird into wind
@@ -427,10 +427,11 @@ void Flock2::DefaultParams ()
 	// good orientation waves: reaction_delay=.002, dyn_stability=0.5
 
 	// Predator
-	m_Params.pred_radius = 10.0;					// detection radius of predator for birds
+	m_Params.pred_radius = 10.0;				// detection radius of predator for birds
 	m_Params.pred_mass = 0.8;
 	m_Params.max_predspeed = 22;				// m/s
 	m_Params.min_predspeed = 8.8;				// m/s
+	m_Params.pred_attack_amt = 0.01f;			// attacking amount
 	//m_Params.pred_flee_speed = m_Params.max_speed;	// bird speed to get away from predator
 	m_Params.avoid_pred_angular_amt = 0.04f;			// bird angular avoidance amount w.r.t. predator
 	m_Params.avoid_pred_power_amt = 0.04f;				// power avoidance amount (N) w.r.t. predator
@@ -662,8 +663,11 @@ void Flock2::Reset (int num, int num_pred )
 
 	// Initialize accel grid
 	//
-	m_Accel.bound_min = Vec3F(-200,   0, -100);
-	m_Accel.bound_max = Vec3F( 200, 150,  100);
+	m_Accel.bound_min = Vec3F(-200, -100, -100);
+	m_Accel.bound_max = Vec3F( 200,  100,  100);
+
+	//m_Accel.bound_min = Vec3F(-200,   0, -100);
+	//m_Accel.bound_max = Vec3F( 200, 150,  100);
 
 	//m_Accel.bound_min = Vec3F(-50,   0, -50);
 	//m_Accel.bound_max = Vec3F( 50, 100,  50);
@@ -1940,9 +1944,9 @@ void Flock2::AdvanceOrientationHoetzlein ()
 
 			// Target corrections
 			angs.z = fmod (angs.z, 180.0 );
-			b->target.z = fmod ( b->target.z, 180 );										// yaw -180/180
+			b->target.z = fmod ( b->target.z, 180 );							// yaw -180/180
 			b->target.x = circleDelta(b->target.z, angs.z) * 0.5;				// banking
-			b->target.y *= m_Params.pitch_decay;																				// level out
+			b->target.y *= m_Params.pitch_decay;								// level out
 			if ( b->target.y < m_Params.pitch_min ) b->target.y = m_Params.pitch_min;
 			if ( b->target.y > m_Params.pitch_max ) b->target.y = m_Params.pitch_max;
 			if ( fabs(b->target.y) < 0.0001) b->target.y = 0;
@@ -2156,13 +2160,7 @@ void Flock2::Advance_pred()
 
 		p = (Predator*) m_Predators.GetElem(FPREDATOR, n);
 
-		dirj = m_Flock.centroid - p->pos;
-		dist = dirj.Length();
-		dirj.Normalize();
-		dirj *= p->orient.inverse();
-
 		new_state = p->currentState;		// assume same state for now
-
 
 		if ( dist > 0) {
 			// only move predator if dist > 0
@@ -2171,13 +2169,17 @@ void Flock2::Advance_pred()
 			if (p->currentState == HOVER) {
 				//printf("current state = HOVER\n");
 
+				dirj = m_Flock.centroid - p->pos;
+				dist = dirj.Length();
+				dirj.Normalize();
+				dirj *= p->orient.inverse();
 				// dirj = (dirj / dist) * p->orient.inverse();
 				yaw = atan2(dirj.z, dirj.x) * RADtoDEG;
 				pitch = asin(dirj.y) * RADtoDEG;
 				p->target.z -= yaw * m_Params.avoid_pred_angular_amt;
 				p->target.y -= pitch * m_Params.avoid_pred_angular_amt;
 
-				if (dist > 10.0f) {
+				if (dist > 25.0f) {
 					new_state = ATTACK;				// predator far from flock, switch to attack
 					//printf("Distance reached, %f.\n", p->pos.y);
 				}
@@ -2185,12 +2187,17 @@ void Flock2::Advance_pred()
 			}
 			else if (p->currentState == ATTACK) {
 				//printf("current state = ATTACK\n");
+				dirj = m_Flock.centroid - p->pos;
+				dist = dirj.Length();
+				dirj.Normalize();
+				dirj *= p->orient.inverse();
+
 				yaw = atan2(dirj.z, dirj.x) * RADtoDEG;
 				pitch = asin(dirj.y) * RADtoDEG;
-				p->target.z += yaw * m_Params.boundary_amt;
-				p->target.y += pitch * m_Params.boundary_amt;
+				p->target.z += yaw * m_Params.pred_attack_amt;
+				p->target.y += pitch * m_Params.pred_attack_amt;
 
-				if (dist < 1.0f) {
+				if (dist < 3.0f) {
 					new_state = HOVER;			// predator close to centroid, switch to hover
 					//printf("Centroid reached.\n");
 				}
@@ -2436,6 +2443,19 @@ void Flock2::VisualizePredators ()
 		else
 			sprintf ( msg, "predator %d currentState is INVALID", n );
 		drawText ( Vec2F(10, 30 + 20*n), msg, tc );
+		sprintf ( msg, "predator: x= %4.1f  y= %4.1f  z= %4.1f ", p->pos.x, p->pos.y, p->pos.z );
+		drawText ( Vec2F(10, 30 + 20 + 20*n), msg, tc );
+		sprintf ( msg, "centroid: x= %4.1f  y= %4.1f  z= %4.1f ", m_Flock.centroid.x, m_Flock.centroid.y, m_Flock.centroid.z );
+		drawText ( Vec2F(10, 30 + 40 + 20*n), msg, tc );
+		sprintf ( msg, "target: x= %4.1f  y= %4.1f  z= %4.1f ", p->target.x, p->target.y, p->target.z );
+		drawText ( Vec2F(10, 30 + 60 + 20*n), msg, tc );
+
+		auto dirj = m_Flock.centroid - p->pos;
+		float dist = dirj.Length();
+		sprintf ( msg, "distance: %4.1f ", dist );
+		drawText ( Vec2F(10, 30 + 80 + 20*n), msg, tc );
+
+
 	}
 
 }
@@ -3122,12 +3142,13 @@ void Flock2::display ()
 			// Draw centroid
 			if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
+				drawCircle3D(m_Flock.centroid, 1.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
 			}
 
 			RenderBirdsWithDart ();
 
 			// ***** Draw predator with circle around it, static
-			float predator_size = 0.1f;
+			float predator_size = 0.5f;
 			Vec4F pclr (1,0,0,1);
 			for (int n = 0; n < m_Predators.GetNumElem(FPREDATOR); n++) {
 				p = (Predator*)m_Predators.GetElem(FPREDATOR, n);
@@ -3137,7 +3158,11 @@ void Flock2::display ()
 				//pclr = (p->currentState == ATTACK) ? Vec4F(1, 0, 0, 1) : Vec4F(0, 0, 1, 1);
 
 				drawLine3D (p->pos, p->pos + (p->vel * predator_size), pclr);
-				drawCircle3D (p->pos, p->pos + (p->vel * predator_size), 0.5, pclr);
+				if(p->currentState == ATTACK)
+					drawCircle3D (p->pos, p->pos + (p->vel * predator_size), 0.5, pclr); // red inner circle
+				else
+					drawCircle3D (p->pos, p->pos + (p->vel * predator_size), 0.5, Vec4F(1,1,1,1)); // white inner circle
+				drawCircle3D (p->pos, p->pos + (p->vel * predator_size), 1.5, pclr);
 			}
 		end3D();
 	}

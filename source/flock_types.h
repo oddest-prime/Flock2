@@ -178,14 +178,15 @@
 		f3			gravity;
 		f3			wind;
 
-		float 	fov_pred, fovcos_pred;
+		float 		fov_pred, fovcos_pred;
 
-		float 	pred_radius;					//----------
-		float 	pred_flee_speed;			//----------
-		float 	avoid_pred_angular_amt;
-		float 	avoid_pred_power_amt;
-		float 	avoid_pred_power_ctr;
+		float 		pred_radius;					//----------
+		float 		pred_flee_speed;			//----------
+		float 		avoid_pred_angular_amt;
+		float 		avoid_pred_power_amt;
+		float 		avoid_pred_power_ctr;
 		float		max_predspeed, min_predspeed;
+		float		pred_attack_amt;
 		float		pred_mass;
 
 		float		reynolds_avoidance;
