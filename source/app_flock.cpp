@@ -182,8 +182,9 @@ public:
 	Flock			m_Flock;			// flock data
 	ParamMap_t		m_ParamMap;
 
-	int				max_cluster_id;		// clustering birds: maximum id
+	int									max_cluster_id;		// clustering birds: maximum id
 	std::vector<std::vector<int>>		cluster_assignment;
+	std::vector<int>					cluster_order;
 
 	// Sim setup
 	float			m_time;
@@ -200,7 +201,7 @@ public:
 	int				m_gpu;							// gpu enable.	0 = off, 1 = on, default
 	int				m_method;						// method.			0 = Flock2(Hoetzlein), 1 = Reynolds boids
 	int				m_analysis;					// analysis.		0 = off, 1 = on, energy & freq
-	int				m_visualize;				// visualize.		0 = realistic, 1 = black&white, 2 = infovis (green angular accel)
+	int				m_visualize;				// visualize.		for possible values see flock_types.h, VISUALIZE_* defines
 	int				m_viewgrid;					// show grid.
 	int				m_seed;
 	Mersenne		m_rnd;
@@ -375,8 +376,8 @@ void Flock2::DefaultParams ()
 	// SI units:
 	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)
 	//
-	m_Params.num_birds = 100; // 	10000
-	m_Params.num_predators = 0; //	0
+	m_Params.num_birds = 1000; // 	10000
+	m_Params.num_predators = 1; //	0
 	m_Params.neighbors = 7;
 
 	m_Params.steps = 2;
@@ -498,7 +499,7 @@ void Flock2::SetupParams()
 	m_ParamMap["reynolds_alignment"] =  ParamPtr('f', &m_Params.reynolds_alignment);
 
 	m_ParamMap["visualize"]	=						ParamPtr('i', &m_visualize);
-	m_ParamMap["gpu"] =									ParamPtr('i', &m_gpu);
+	m_ParamMap["gpu"] =								ParamPtr('i', &m_gpu);
 	m_ParamMap["method"] =							ParamPtr('i', &m_method);
 	m_ParamMap["analysis"] =						ParamPtr('i', &m_analysis);
   m_ParamMap["grid"] =								ParamPtr('i', &m_viewgrid );
@@ -522,12 +523,12 @@ bool Flock2::SetParam (std::string name, float val, Vec3F vec)
 
 void Flock2::on_arg (int i, std::string arg, std::string val)
 {
-	if (arg.compare("-i")==0)		{	LoadScene (val);	}											// input scene
-  if (arg.compare("-v")==0)		{	m_visualize = strToI ( val ); }					// visualization select
-  if (arg.compare("-g")==0)		{ m_gpu = strToI(val); }									// gpu enable. 0 = off, 1 = on
-	if (arg.compare("-m") == 0) { m_method = strToI(val); }								// method select. 0 = Flock2 (Hoetzlein), 1 = Reynolds
-	if (arg.compare("-a") == 0) { m_analysis = strToI(val); }							// analysis select. 0 = off, 1 = on
-	if (arg.compare("-d") == 0) { m_viewgrid = strToI(val); }							// show grid
+	if (arg.compare("-i")==0)		{	LoadScene (val);	}								// input scene
+	if (arg.compare("-v")==0)		{	m_visualize = strToI ( val ); }						// visualization select
+	if (arg.compare("-g")==0)		{ m_gpu = strToI(val); }								// gpu enable. 0 = off, 1 = on
+	if (arg.compare("-m") == 0) 	{ m_method = strToI(val); }								// method select. 0 = Flock2 (Hoetzlein), 1 = Reynolds
+	if (arg.compare("-a") == 0) 	{ m_analysis = strToI(val); }							// analysis select. 0 = off, 1 = on
+	if (arg.compare("-d") == 0) 	{ m_viewgrid = strToI(val); }							// show grid
 
 }
 
@@ -1209,9 +1210,18 @@ void Flock2::CalculateClusters ()
 	}
 
 	std::sort(cluster_histogram.begin(), cluster_histogram.end(), std::greater<>());
+/*
+	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
+		if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds / 20)
+			printf("cluster %d, %d elem.\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt);
+	}
+	*/
+
+	cluster_order.clear();
+	cluster_order.resize(cluster_assignment.size());
 
 	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
-		printf("cluster %d, %d elem.\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt);
+		cluster_order.at(cluster_histogram.at(i).cluster_id) = i;
 	}
 
 }
@@ -2928,6 +2938,41 @@ void Flock2::RenderBirdsWithMesh (int i)
 	}
 }
 
+// taken from https://stackoverflow.com/questions/470690/how-to-automatically-generate-n-distinct-colors
+Vec4F GenerateColorN(int n, int max) {
+	float x = (float)n / (float)max;
+
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 1.0f;
+    if (x >= 0.0f && x < 0.2f) {
+        x = x / 0.2f;
+        r = 0.0f;
+        g = x;
+        b = 1.0f;
+    } else if (x >= 0.2f && x < 0.4f) {
+        x = (x - 0.2f) / 0.2f;
+        r = 0.0f;
+        g = 1.0f;
+        b = 1.0f - x;
+    } else if (x >= 0.4f && x < 0.6f) {
+        x = (x - 0.4f) / 0.2f;
+        r = x;
+        g = 1.0f;
+        b = 0.0f;
+    } else if (x >= 0.6f && x < 0.8f) {
+        x = (x - 0.6f) / 0.2f;
+        r = 1.0f;
+        g = 1.0f - x;
+        b = 0.0f;
+    } else if (x >= 0.8f && x <= 1.0f) {
+        x = (x - 0.8f) / 0.2f;
+        r = 1.0f;
+        g = 0.0f;
+        b = x;
+    }
+    return Vec4F(r, g, b, 1);
+}
 
 void Flock2::RenderBirdsWithDart ()
 {
@@ -2940,18 +2985,25 @@ void Flock2::RenderBirdsWithDart ()
 
 		// bird color
 		b = (Bird*)m_Birds.GetElem(0, n);
-		clr = Vec4F(0, 0, 0, 1);							// default. black on sky/white.
-		if (m_visualize == 1) {									// infovis coloring..
+		clr = Vec4F(0, 0, 0, 1);					// default. black on sky/white.
+		if (m_visualize == VISUALIZE_INFOVIS) {		// infovis coloring..
 			if (b->clr.w == 0) {
 				float a = fmin(b->ang_accel.Length() / 24, 1);
 				clr = Vec4F(0, a, 0, 1);			// untagged, use green = angular accel
 			}
 			else {
-				clr = b->clr;										// use tagged color (orange=boundary bird)
+				clr = b->clr;						// use tagged color (orange=boundary bird)
 			}
 		}
+		if (m_visualize == VISUALIZE_CLUSTERS) {	// cluster coloring..
+			int order_n = cluster_order.at(b->cluster_id);
+			if(order_n < 10)
+				clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
+			else
+				clr = Vec4F(0.9, 0.9, 0.9, 1);
+		}
 		// bird shape
-		if (m_visualize == 1) {
+		if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 			// line
 			drawLine3D(b->pos, b->pos + (b->vel * bird_size), clr);
 		}
@@ -2975,18 +3027,22 @@ void Flock2::drawBackground ()
 	int w = getWidth(), h = getHeight();
 
 	switch (m_visualize) {
-	case 0:
+	case VISUALIZE_REALISTIC:
 		// realistic
 		// drawGradient ( Vec2F(0,0), Vec2F(w,h), Vec4F(.1,.1,.4,1), Vec4F(.1,.1,.4,1), Vec4F(0.5,0.4,.6,1), Vec4F(0.5,0.4,.6,1) );
 		drawGradient ( Vec2F(0,0), Vec2F(w,h), Vec4F(.6,.7,.8,1), Vec4F(.6,.6,.8,1), Vec4F(1,1,.9,1), Vec4F(1,1,.9,1) );
 		break;
-	case 1:
+	case VISUALIZE_INFOVIS:
+	case VISUALIZE_CLUSTERS:
 		// infovis - green angular accel
 		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(.4, .4, .4, 1));
 		break;
-	case 2:
+	case VISUALIZE_BLACK_WHITE:
 		// black & white
 		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(1, 1, 1, 1));
+		break;
+	default:
+		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(1, 0, 0, 1));
 		break;
 	};
 }
@@ -3064,7 +3120,7 @@ void Flock2::display ()
 			}
 
 			// Draw centroid
-			if (m_visualize == 1 ) {
+			if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
 			}
 
@@ -3274,7 +3330,7 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 		Reset ( m_Params.num_birds, m_Params.num_predators);
 		break;
 	case 'v':
-		if (++m_visualize > 2 ) m_visualize = 0;
+		if (++m_visualize > VISUALIZE_CLUSTERS ) m_visualize = 0;
 		break;
 	case 's':
 		if (++m_draw_mesh > 2 ) m_draw_mesh = 0;
@@ -3318,7 +3374,7 @@ void Flock2::startup ()
  	m_gpu = 1;
 	m_method = 0;			// 0 = Flock2, 1 = Reynolds
 	m_analysis = 0;			// 0 = off, 1 = analyze freq & energy
-	m_visualize = 1;		// 0 = realistic, 1 = infovis, 2 = black&white
+	m_visualize = VISUALIZE_CLUSTERS;		// for possible values see flock_types.h, VISUALIZE_* defines
 	m_viewgrid = 0;
 	m_seed = 12;
 

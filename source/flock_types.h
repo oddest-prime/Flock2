@@ -2,6 +2,11 @@
 #ifndef DEF_FLOCK_TYPES
 	#define DEF_FLOCK_TYPES
 
+	#define VISUALIZE_REALISTIC			0
+	#define VISUALIZE_BLACK_WHITE		1
+	#define VISUALIZE_INFOVIS			2
+	#define VISUALIZE_CLUSTERS			3
+
 	// Particle data
 	#define FBIRD		0
 	#define FGCELL		1
