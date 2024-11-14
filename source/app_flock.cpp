@@ -8,20 +8,20 @@
 // * Derivative works may append the above copyright notice but should not remove or modify earlier notices.
 //
 // MIT License:
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
-// associated documentation files (the "Software"), to deal in the Software without restriction, including without 
-// limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+// associated documentation files (the "Software"), to deal in the Software without restriction, including without
+// limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 // and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
-// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS 
-// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
 // OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 #include <time.h>
-#include "main.h"					// window system 
+#include "main.h"					// window system
 #include "timex.h"				// for accurate timing
 #include "quaternion.h"
 #include "datax.h"
@@ -33,6 +33,8 @@
 
 #include <fstream>
 #include <iostream>
+#include <vector>
+#include <algorithm>
 
 using namespace std;
 
@@ -42,7 +44,7 @@ using namespace std;
 #define PLOT_RESX		2048
 #define PLOT_RESY		1200
 
-#define DEBUG_CUDA		false	
+#define DEBUG_CUDA		false
 //#define DEBUG_BIRD		7
 
 #include "gxlib.h"			// low-level render
@@ -58,7 +60,7 @@ struct ParamPtr {
   ParamPtr () {dt=' '; ptr = 0; }
 	ParamPtr (uchar t, int* p)	 { dt = t; ptr = (char*) p; }
 	ParamPtr (uchar t, float* p) { dt = t; ptr = (char*) p; }
-	ParamPtr (uchar t, Vec3F* p) { dt = t; ptr = (char*) p; }  
+	ParamPtr (uchar t, Vec3F* p) { dt = t; ptr = (char*) p; }
 	uchar dt;
 	char* ptr;
 } ;
@@ -87,7 +89,7 @@ struct graph_t {
 
 // FFTW Analysis
 #ifdef USE_FFTW
-	#include <fftw3.3/fftw3.h>	
+	#include <fftw3.3/fftw3.h>
 #endif
 
 // VBO buffer ids
@@ -102,8 +104,8 @@ struct graph_t {
 // Renderable mesh
 struct RMesh {
 	RMesh() { for (int n=0; n < VBO_MAX; n++) mVBO[n] = VBO_NULL; }
-	std::string		name;	
-	MeshX*				mesh;						// mesh geometry (cpu)	
+	std::string		name;
+	MeshX*				mesh;						// mesh geometry (cpu)
 	GLint					mVBO[VBO_MAX];	// opengl VBO
 	int						vert_cnt;
 };
@@ -117,34 +119,35 @@ public:
 	virtual void startup ();
 	virtual void display();
 	virtual void reshape(int w, int h);
-	virtual void motion (AppEnum button, int x, int y, int dx, int dy);	
+	virtual void motion (AppEnum button, int x, int y, int dx, int dy);
 	virtual void keyboard(int keycode, AppEnum action, int mods, int x, int y);
-	virtual void mouse (AppEnum button, AppEnum state, int mods, int x, int y);	
+	virtual void mouse (AppEnum button, AppEnum state, int mods, int x, int y);
 	virtual void mousewheel(int delta);
 	virtual void shutdown();
 
 	// Simulation
 	Bird*			AddBird ( Vec3F pos, Vec3F vel, Vec3F target, float power );
 	void			DefaultParams();
-	void			SetupParams();	
+	void			SetupParams();
 	bool			SetParam(std::string name, float val, Vec3F vec);
 	void			LoadScene(std::string fname);
-	void			Reset (int num_bird, int num_pred);	
+	void			Reset (int num_bird, int num_pred);
 	void			Run ();
-	void			FindNeighbors ();	
-	void			AdvanceOrientationHoetzlein ();	
+	void			FindNeighbors ();
+	void 			CalculateClusters ();
+	void			AdvanceOrientationHoetzlein ();
 	void			AdvanceVectorsReynolds ();
 	void			UpdateFlockData ();
 	void			OutputPlot ( int what, int frame );
 	void			OutputPointCloudFiles (int frame);
 	void			OutputFFTW ( int frame );
 	void			StartNextRun ();
-	
+
 	// Predators
-	Predator*	AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power);		//predators
-	void 			Advance_pred();		
-	void			TrackBird();			
-	
+	Predator*		AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power);
+	void 			Advance_pred();
+	void			TrackBird();
+
 	// Rendering
 	void			SelectBird (float x, float y);
 	void			Graph ( int id, float y, Vec4F clr, Vec2F scal );
@@ -165,20 +168,23 @@ public:
 	void			InitializeGrid ();
 	void			InsertIntoGrid ();
 	void			PrefixSumGrid ();
-	void			DrawAccelGrid ();	
+	void			DrawAccelGrid ();
 
 	void			transitionPredState(int centroidReached, predState& currentState);
 	int				centroidReached;
 
 	// Birds
-	DataX			m_Birds;	
-	DataX			m_BirdsTmp;			
+	DataX			m_Birds;
+	DataX			m_BirdsTmp;
 	DataX			m_Grid;				// spatial grid accel
 	Accel			m_Accel;			// accel parameters
-	Params		m_Params;			// simulation params
+	Params			m_Params;			// simulation params
 	Flock			m_Flock;			// flock data
 	ParamMap_t		m_ParamMap;
-	
+
+	int				max_cluster_id;		// clustering birds: maximum id
+	std::vector<std::vector<int>>		cluster_assignment;
+
 	// Sim setup
 	float			m_time;
 	int				m_frame;
@@ -188,17 +194,17 @@ public:
 
 	// Predators
 	DataX			m_Predators;
-	Vec3F			m_predcentroid;	
+	Vec3F			m_predcentroid;
 
-  // Configuration
+	// Configuration
 	int				m_gpu;							// gpu enable.	0 = off, 1 = on, default
-	int				m_method;						// method.			0 = Flock2(Hoetzlein), 1 = Reynolds boids	
+	int				m_method;						// method.			0 = Flock2(Hoetzlein), 1 = Reynolds boids
 	int				m_analysis;					// analysis.		0 = off, 1 = on, energy & freq
 	int				m_visualize;				// visualize.		0 = realistic, 1 = black&white, 2 = infovis (green angular accel)
-  int				m_viewgrid;					// show grid.
+	int				m_viewgrid;					// show grid.
 	int				m_seed;
 	Mersenne		m_rnd;
-	
+
 	// Rendering
 	bool			m_running;
 	int				m_cam_mode;
@@ -210,20 +216,20 @@ public:
 	bool			m_cockpit_view;
 	int				m_draw_mesh;
 	bool			m_draw_grid;
-	bool			m_draw_plot;	
+	bool			m_draw_plot;
 	bool			m_kernels_loaded;
-	int				bird_index;		
-	float			closest_bird;	
+	int				bird_index;
+	float			closest_bird;
 	int				bird_count = 0;
 	int				runcount = 0;
 
-  RMesh			m_obj[4];
-	
-	// Stats - Output files	
+	RMesh			m_obj[4];
+
+	// Stats - Output files
 	FILE*			m_runs_outfile;
 
 	// Stats - Image plots
-	ImageX		m_plot[2];
+	ImageX			m_plot[2];
 
 	// Stats - Bird vis, graphs, lines
 	std::vector< vis_t >  m_vis;
@@ -234,19 +240,19 @@ public:
 	#ifdef USE_FFTW
 		double*				m_samples;
 		double*				m_fftw_in;
-		int						m_fftw_N;
+		int					m_fftw_N;
 		fftw_plan			m_fftw_plan;
-		fftw_complex* m_fftw_out;		
-		float					m_fftw_energy[32767];
-		float					m_freq_grp[32767][4];
-		float					m_freq_gmin[4];
-		float					m_freq_gmax[4];
-		float					m_fftw_s1[32767];
-		float					m_fftw_s2[32767];
-		int						m_peak_cnt;
-		float					m_peak_ave;
-		float					m_peak_max;
-	#endif			
+		fftw_complex*		m_fftw_out;
+		float				m_fftw_energy[32767];
+		float				m_freq_grp[32767][4];
+		float				m_freq_gmin[4];
+		float				m_freq_gmax[4];
+		float				m_fftw_s1[32767];
+		float				m_fftw_s2[32767];
+		int					m_peak_cnt;
+		float				m_peak_ave;
+		float				m_peak_max;
+	#endif
 
 	// Experiment setup
 	int				m_run;
@@ -260,7 +266,7 @@ public:
 		void			LoadAllKernels ();
 
 		CUcontext		m_ctx;
-		CUdevice		m_dev; 
+		CUdevice		m_dev;
 		CUdeviceptr	m_cuAccel;
 		CUdeviceptr	m_cuParam;
 		CUdeviceptr	m_cuFlock;
@@ -274,9 +280,9 @@ Flock2 obj;
 #ifdef BUILD_CUDA
 	void Flock2::LoadKernel ( int fid, std::string func )
 	{
-		char cfn[512];		
+		char cfn[512];
 		strcpy ( cfn, func.c_str() );
-		cuCheck ( cuModuleGetFunction ( &m_Kernel[fid], m_Module, cfn ), "LoadKernel", "cuModuleGetFunction", cfn, DEBUG_CUDA );	
+		cuCheck ( cuModuleGetFunction ( &m_Kernel[fid], m_Module, cfn ), "LoadKernel", "cuModuleGetFunction", cfn, DEBUG_CUDA );
 	}
 
 	void Flock2::LoadAllKernels ()
@@ -290,7 +296,7 @@ Flock2 obj;
 		cuCheck ( cuModuleLoad ( &m_Module, filepath.c_str() ), "LoadKernel", "cuModuleLoad", "flock_kernels.ptx", DEBUG_CUDA );
 
 		LoadKernel ( KERNEL_INSERT,					"insertParticles" );
-		LoadKernel ( KERNEL_COUNTING_SORT,	"countingSortFull" );	
+		LoadKernel ( KERNEL_COUNTING_SORT,	"countingSortFull" );
 		LoadKernel ( KERNEL_FIND_NBRS,			"findNeighborsTopological" );
 		//LoadKernel ( KERNEL_FIND_NBRS,			"findNeighbors" );
 		LoadKernel ( KERNEL_ADVANCE_ORIENT,	"advanceOrientationHoetzlein" );
@@ -309,17 +315,17 @@ Bird* Flock2::AddBird ( Vec3F pos, Vec3F vel, Vec3F target, float power )
 	Bird b;
 	b.id = ndx;
 	b.pos = pos;
-	b.vel = vel;		
-	b.target = target;		
+	b.vel = vel;
+	b.target = target;
 	b.power = power;
 	b.pitch_adv = 0;
 	b.accel.Set(0,0,0);
 
-	dir = b.vel; dir.Normalize();	
+	dir = b.vel; dir.Normalize();
 	b.orient.fromDirectionAndUp ( dir, Vec3F(0,1,0) );
 	b.orient.normalize();
-	b.orient.toEuler ( angs );			
-	
+	b.orient.toEuler ( angs );
+
 	m_Birds.SetElem (FBIRD, ndx, &b );
 
 	return (Bird*) m_Birds.GetElem( FBIRD, ndx);
@@ -354,12 +360,12 @@ Predator* Flock2::AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power)	/
 } // ****
 
 int iDivUp (int a, int b) {
-    return (a % b != 0) ? (a / b + 1) : (a / b);
+	return (a % b != 0) ? (a / b + 1) : (a / b);
 }
 void ComputeNumBlocks (int numPnts, int minThreads, int &numBlocks, int &numThreads)
 {
-    numThreads = std::min( minThreads, numPnts );
-    numBlocks = (numThreads==0) ? 1 : iDivUp ( numPnts, numThreads );
+	numThreads = std::min( minThreads, numPnts );
+	numBlocks = (numThreads==0) ? 1 : iDivUp ( numPnts, numThreads );
 }
 
 void Flock2::DefaultParams ()
@@ -367,53 +373,53 @@ void Flock2::DefaultParams ()
 	// Flock parameters
 	//
 	// SI units:
-	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)	
+	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)
 	//
 	m_Params.num_birds = 100; // 	10000
-	m_Params.num_predators = 1; //	0
+	m_Params.num_predators = 0; //	0
 	m_Params.neighbors = 7;
 
 	m_Params.steps = 2;
 	m_Params.DT = 0.005;							// timestep (sec), .005 = 5 msec = 200 hz
-	
+
 	m_Params.mass =	0.08;							// bird mass (kg) - starling
 	m_Params.power = 0.2173;							// 100% power (in joules)
 	m_Params.min_speed = 5;						// min speed (m/s)		// Demsar2014
-	m_Params.max_speed = 18;					// max speed (m/s)		// Demsar2014		
+	m_Params.max_speed = 18;					// max speed (m/s)		// Demsar2014
 	m_Params.min_power = -20;					// min power (N)
 	m_Params.max_power = 20;					// max power (N)
 	m_Params.wind =	Vec3F(0,0,0);			// wind direction & strength
-	m_Params.fov = 240;								// bird field-of-view (degrees), max = 360 deg (180 left & right)	
-	
+	m_Params.fov = 240;								// bird field-of-view (degrees), max = 360 deg (180 left & right)
+
 	// social factors
-	m_Params.boundary_cnt = 120;					// border width (# birds)	
-	m_Params.boundary_amt = 0.40f;			// border steering amount (keep <0.1)	
-	
+	m_Params.boundary_cnt = 120;					// border width (# birds)
+	m_Params.boundary_amt = 0.40f;			// border steering amount (keep <0.1)
+
 	//-- disable border
 	//	m_Params.border_cnt = 0;
 	//		m_Params.border_amt = 0.0f;
 
 	m_Params.avoid_angular_amt= 0.01f;	// bird angular avoidance amount
 	m_Params.avoid_power_amt =	0.00f;	// power avoidance amount (N)
-	m_Params.avoid_power_ctr =	3;			// power avoidance center (N)	
+	m_Params.avoid_power_ctr =	3;			// power avoidance center (N)
 	m_Params.align_amt = 0.400f;				// bird alignment amount
 	m_Params.cohesion_amt =	0.001f;			// bird cohesion amount
 
 	// flight parameters
 	m_Params.wing_area = 0.0224;
 	m_Params.lift_factor = 0.5714;			// lift factor
-	m_Params.drag_factor = 0.1731;			// drag factor 
+	m_Params.drag_factor = 0.1731;			// drag factor
 	m_Params.safe_radius = 2.0;					// radius of avoidance (m)
 	m_Params.pitch_decay = 0.95;				// pitch decay (return to level flight)
 	m_Params.pitch_min = -40;						// min pitch (degrees)
-	m_Params.pitch_max = 20;						// max pitch (degrees)	
+	m_Params.pitch_max = 20;						// max pitch (degrees)
 	m_Params.reaction_speed = 4000;			// reaction speed (millisec)
 	m_Params.dynamic_stability = 0.8f;	// dyanmic stability factor
 	m_Params.air_density = 1.225;				// air density (kg/m^3)
 	m_Params.gravity = Vec3F(0, -9.8, 0);		// gravity (m/s^2)
 	m_Params.front_area = 0.1f;					// section area of bird into wind
 	m_Params.bound_soften = 20;					// ground detection range
-	m_Params.avoid_ground_power = 4;			// ground avoid power setting 
+	m_Params.avoid_ground_power = 4;			// ground avoid power setting
 	m_Params.avoid_ground_amt = 0.5f;			// ground avoid strength
 	m_Params.avoid_ceil_amt = 0.1f;				// ceiling avoid strength
 
@@ -421,9 +427,9 @@ void Flock2::DefaultParams ()
 
 	// Predator
 	m_Params.pred_radius = 10.0;					// detection radius of predator for birds
-	m_Params.pred_mass = 0.8;	
+	m_Params.pred_mass = 0.8;
 	m_Params.max_predspeed = 22;				// m/s
-	m_Params.min_predspeed = 8.8;				// m/s	
+	m_Params.min_predspeed = 8.8;				// m/s
 	//m_Params.pred_flee_speed = m_Params.max_speed;	// bird speed to get away from predator
 	m_Params.avoid_pred_angular_amt = 0.04f;			// bird angular avoidance amount w.r.t. predator
 	m_Params.avoid_pred_power_amt = 0.04f;				// power avoidance amount (N) w.r.t. predator
@@ -433,13 +439,13 @@ void Flock2::DefaultParams ()
 	m_Params.fovcos_pred = cos(m_Params.fov_pred * DEGtoRAD);
 
 	// testing level flight	- no social factors, only balanced flight
-	/* m_Params.align_amt = 0.0f;	
+	/* m_Params.align_amt = 0.0f;
 	m_Params.cohesion_amt =	0.0f;
 	m_Params.avoid_angular_amt = 0.0f;
 	m_Params.border_amt = 0.0f;   */
 
-	// Reynold's Classic model		
-	
+	// Reynold's Classic model
+
 	m_Params.reynolds_avoidance = 0.5;
 	m_Params.reynolds_alignment = 1.0;
 	m_Params.reynolds_cohesion =  0.2;
@@ -449,7 +455,7 @@ void Flock2::SetupParams()
 {
 	// create mappings from parameter name to variable in mem
 	m_ParamMap["steps"] =								ParamPtr('i', &m_Params.steps);
-	m_ParamMap["dt"] =									ParamPtr('f', &m_Params.DT);	
+	m_ParamMap["dt"] =									ParamPtr('f', &m_Params.DT);
 	m_ParamMap["num_birds"] =						ParamPtr('i', &m_Params.num_birds );
 	m_ParamMap["num_predators"] =				ParamPtr('i', &m_Params.num_predators);
 	m_ParamMap["neighbors"] =						ParamPtr('i', &m_Params.neighbors);
@@ -491,7 +497,7 @@ void Flock2::SetupParams()
 	m_ParamMap["reynolds_cohesion"] =		ParamPtr('f', &m_Params.reynolds_cohesion);
 	m_ParamMap["reynolds_alignment"] =  ParamPtr('f', &m_Params.reynolds_alignment);
 
-	m_ParamMap["visualize"]	=						ParamPtr('i', &m_visualize); 
+	m_ParamMap["visualize"]	=						ParamPtr('i', &m_visualize);
 	m_ParamMap["gpu"] =									ParamPtr('i', &m_gpu);
 	m_ParamMap["method"] =							ParamPtr('i', &m_method);
 	m_ParamMap["analysis"] =						ParamPtr('i', &m_analysis);
@@ -529,9 +535,9 @@ void Flock2::LoadScene (std::string fname)
 {
 	char buf[2048];
 	std::string filepath, lin;
-	std::string param, value;		
+	std::string param, value;
 	float val;
-	Vec3F vec;	
+	Vec3F vec;
 
 	// Open script file
 	if (!getFileLocation(fname, filepath)) {
@@ -564,8 +570,8 @@ void Flock2::LoadScene (std::string fname)
 		  dbgprintf ( "  %s: %f\n", param.c_str(), val );
 			SetParam ( param, val, vec );
 			pset++;
-		}		
-	}	
+		}
+	}
 	fclose(fp);
 
 	dbgprintf ( "LOADED OK. %d lines, %d params set.\n", lnum, pset);
@@ -585,11 +591,11 @@ void Flock2::Reset (int num, int num_pred )
 	// Global flock variables
 	//
 	m_Params.num_birds = num;
-	m_Params.num_predators = num_pred; 
+	m_Params.num_predators = num_pred;
 
 	// Calculated params
 	m_Params.fovcos = cos ( m_Params.fov * 0.5 * DEGtoRAD );
-	
+
 	// Initialized bird memory
 	//
 	int numPoints = m_Params.num_birds;
@@ -599,41 +605,41 @@ void Flock2::Reset (int num, int num_pred )
 	m_Birds.DeleteAllBuffers ();
 	m_Birds.AddBuffer ( FBIRD,  "bird",		sizeof(Bird),	numPoints, usage );
 	m_Birds.AddBuffer ( FGCELL, "gcell",	sizeof(uint),	numPoints, usage );
-	m_Birds.AddBuffer ( FGNDX,  "gndx",		sizeof(uint),	numPoints, usage );	
+	m_Birds.AddBuffer ( FGNDX,  "gndx",		sizeof(uint),	numPoints, usage );
 
 	// -------- PREDATOR -----
 	m_Predators.DeleteAllBuffers();
-	m_Predators.AddBuffer(FPREDATOR, "predator", sizeof(Predator), numPoints_pred, usage);	
+	m_Predators.AddBuffer(FPREDATOR, "predator", sizeof(Predator), numPoints_pred, usage);
 
 	// Add birds
 	//
 	for (int n=0; n < numPoints; n++ ) {
-		
+
 		//-- test: head-on impact of two bird flocks
-    /* int grp;
+	/* int grp;
 		bool ok = false;
 		while (!ok) {
 			pos = m_rnd.randV3( -50, 50 );
-			if (pos.Length() < 50 ) {				
+			if (pos.Length() < 50 ) {
 				grp = (n % 2);
 				pos += Vec3F( 0, 100, grp ? -80 : 80 );
 				vel = Vec3F(  0,   0, grp ?  10 :-10 );
 				h = grp ? 90 : -90;
-				b = AddBird ( pos, vel, Vec3F(0, 0, h), 3); 
+				b = AddBird ( pos, vel, Vec3F(0, 0, h), 3);
 				//rb->clr = (grp==0) ? Vec4F(1,0,0,1) : Vec4F(0,1,0,1);
 				ok = true;
 			}
 		} */
-		
+
 		// randomly distribute birds
 		pos = m_rnd.randV3( -50, 50 );
 		pos.y = pos.y * .5f + 50;
-		
-		vel = m_rnd.randV3( -20, 20 );		
-		vel *= 7.5 / vel.Length (); 
-		h = m_rnd.randF(-180, 180); 
-		b = AddBird ( pos, vel, Vec3F(0, 0, h), 1 );  
-		b->clr = Vec4F( (pos.x+100)/200.0f, pos.y/200.f, (pos.z+100)/200.f, 1.f ); 
+
+		vel = m_rnd.randV3( -20, 20 );
+		vel *= 7.5 / vel.Length ();
+		h = m_rnd.randF(-180, 180);
+		b = AddBird ( pos, vel, Vec3F(0, 0, h), 1 );
+		b->clr = Vec4F( (pos.x+100)/200.0f, pos.y/200.f, (pos.z+100)/200.f, 1.f );
 
 	}
 
@@ -652,7 +658,7 @@ void Flock2::Reset (int num, int num_pred )
 		p->clr = Vec4F(0.804, 0.961, 0.008, 1);
 
 	}
-	
+
 	// Initialize accel grid
 	//
 	m_Accel.bound_min = Vec3F(-200,   0, -100);
@@ -667,9 +673,9 @@ void Flock2::Reset (int num, int num_pred )
 	InitializeGrid ();
 
 	#ifdef BUILD_CUDA
-		// Reset GPU 
+		// Reset GPU
 		if (m_gpu) {
-		
+
 			// Load GPU kernels [if needed]
 			if (!m_kernels_loaded) {
 				m_kernels_loaded = true;
@@ -682,7 +688,7 @@ void Flock2::Reset (int num, int num_pred )
 			// Assign GPU symbols
 			m_Birds.AssignToGPU ( "FBirds", m_Module );
 			m_BirdsTmp.AssignToGPU ( "FBirdsTmp", m_Module );
-			m_Grid.AssignToGPU ( "FGrid", m_Module );		
+			m_Grid.AssignToGPU ( "FGrid", m_Module );
 			m_Predators.AssignToGPU ( "FPredators", m_Module );			// predators
 			cuCheck ( cuMemcpyHtoD ( m_cuAccel, &m_Accel,	sizeof(Accel) ),	"Accel", "cuMemcpyHtoD", "cuAccel", DEBUG_CUDA );
 			cuCheck ( cuMemcpyHtoD ( m_cuParam, &m_Params, sizeof(Params) ),"Params", "cuMemcpyHtoD", "cuParam", DEBUG_CUDA );
@@ -695,11 +701,11 @@ void Flock2::Reset (int num, int num_pred )
 			// Update temp list
 			m_BirdsTmp.MatchAllBuffers ( &m_Birds, DT_CUMEM );
 
-			// Compute particle thread blocks	
+			// Compute particle thread blocks
 			int threadsPerBlock = 512;
-			ComputeNumBlocks ( numPoints, threadsPerBlock, m_Accel.numBlocks, m_Accel.numThreads);				// particles    
-			m_Accel.szPnts = (m_Accel.numBlocks  * m_Accel.numThreads);     
-			dbgprintf ( "  Particles: %d, threads:%d x %d=%d, size:%d\n", numPoints, m_Accel.numBlocks, m_Accel.numThreads, m_Accel.numBlocks*m_Accel.numThreads, m_Accel.szPnts);	
+			ComputeNumBlocks ( numPoints, threadsPerBlock, m_Accel.numBlocks, m_Accel.numThreads);				// particles
+			m_Accel.szPnts = (m_Accel.numBlocks  * m_Accel.numThreads);
+			dbgprintf ( "  Particles: %d, threads:%d x %d=%d, size:%d\n", numPoints, m_Accel.numBlocks, m_Accel.numThreads, m_Accel.numBlocks*m_Accel.numThreads, m_Accel.szPnts);
 
 			// Update GPU access
 			m_Birds.UpdateGPUAccess ();
@@ -716,12 +722,12 @@ void Flock2::Reset (int num, int num_pred )
 	// reset time
 	m_time = 0;
 	m_frame = 0;
-	
+
 	// clear plots
 	m_vis.clear ();
 	m_graph.clear ();
-	m_plot[0].Fill ( 0,0,0,0 );	
-	m_plot[1].Fill ( 0,0,0,0 );	
+	m_plot[0].Fill ( 0,0,0,0 );
+	m_plot[1].Fill ( 0,0,0,0 );
 
 }
 
@@ -743,18 +749,18 @@ void Flock2::drawGrid( Vec4F clr )
 
 // Ideal grid cell size (gs) = 2 * smoothing radius = 0.02*2 = 0.04
 // Ideal domain size = k * gs / d = k*0.02*2/0.005 = k*8 = {8, 16, 24, 32, 40, 48, ..}
-//    (k = number of cells, gs = cell size, d = simulation scale)
+//	(k = number of cells, gs = cell size, d = simulation scale)
 //
 void Flock2::InitializeGrid ()
 {
 	// Grid size - cell spacing in SPH units
-	m_Accel.grid_size = m_Accel.psmoothradius / m_Accel.grid_density;	
-																					
+	m_Accel.grid_size = m_Accel.psmoothradius / m_Accel.grid_density;
+
 	// Grid bounds - one cell beyond fluid domain
 	m_Accel.gridMin = m_Accel.bound_min;		m_Accel.gridMin -= float(2.0*(m_Accel.grid_size / m_Accel.sim_scale ));
 	m_Accel.gridMax = m_Accel.bound_max;		m_Accel.gridMax += float(2.0*(m_Accel.grid_size / m_Accel.sim_scale ));
-	m_Accel.gridSize = m_Accel.gridMax - m_Accel.gridMin;	
-	
+	m_Accel.gridSize = m_Accel.gridMax - m_Accel.gridMin;
+
 	float grid_size = m_Accel.grid_size;
 	float world_cellsize = grid_size / m_Accel.sim_scale;		// cell spacing in world units
 	float sim_scale = m_Accel.sim_scale;
@@ -765,9 +771,9 @@ void Flock2::InitializeGrid ()
 	m_Accel.gridRes.z = (int) ceil ( m_Accel.gridSize.z / world_cellsize );
 	m_Accel.gridSize.x = m_Accel.gridRes.x * world_cellsize;						// Adjust grid size to multiple of cell size
 	m_Accel.gridSize.y = m_Accel.gridRes.y * world_cellsize;
-	m_Accel.gridSize.z = m_Accel.gridRes.z * world_cellsize;	
-	m_Accel.gridDelta = Vec3F(m_Accel.gridRes) / m_Accel.gridSize;		// delta = translate from world space to cell #	
-	
+	m_Accel.gridSize.z = m_Accel.gridRes.z * world_cellsize;
+	m_Accel.gridDelta = Vec3F(m_Accel.gridRes) / m_Accel.gridSize;		// delta = translate from world space to cell #
+
 	// Grid total - total number of grid cells
 	m_Accel.gridTotal = (int) (m_Accel.gridRes.x * m_Accel.gridRes.y * m_Accel.gridRes.z);
 
@@ -798,25 +804,25 @@ void Flock2::InitializeGrid ()
 	// Allocate acceleration
 	m_Grid.DeleteAllBuffers ();
 	m_Grid.AddBuffer ( AGRID,			"grid", sizeof(uint), numPoints, mem_usage );
-	m_Grid.AddBuffer ( AGRIDCNT,	"gridcnt",	sizeof(uint), m_Accel.gridTotal, mem_usage );	
+	m_Grid.AddBuffer ( AGRIDCNT,	"gridcnt",	sizeof(uint), m_Accel.gridTotal, mem_usage );
 	m_Grid.AddBuffer ( AGRIDOFF,	"gridoff",	sizeof(uint), m_Accel.gridTotal, mem_usage );
 	m_Grid.AddBuffer ( AAUXARRAY1,"aux1", sizeof(uint), numElem2, mem_usage );
 	m_Grid.AddBuffer ( AAUXSCAN1, "scan1", sizeof(uint), numElem2, mem_usage );
 	m_Grid.AddBuffer ( AAUXARRAY2,"aux2", sizeof(uint), numElem3, mem_usage );
-	m_Grid.AddBuffer ( AAUXSCAN2, "scan2", sizeof(uint), numElem3, mem_usage );		
+	m_Grid.AddBuffer ( AAUXSCAN2, "scan2", sizeof(uint), numElem3, mem_usage );
 
 	for (int b=0; b <= AAUXSCAN2; b++)
 		m_Grid.SetBufferUsage ( b, DT_UINT );		// for debugging
 
 	// Grid adjacency lookup - stride to access neighboring cells in all 6 directions
 	int cell = 0;
-	for (int y=0; y < m_Accel.gridSrch; y++ ) 
-		for (int z=0; z < m_Accel.gridSrch; z++ ) 
-			for (int x=0; x < m_Accel.gridSrch; x++ ) 
-				m_Accel.gridAdj [ cell++]  = ( y * m_Accel.gridRes.z+ z ) * m_Accel.gridRes.x +  x ;			
+	for (int y=0; y < m_Accel.gridSrch; y++ )
+		for (int z=0; z < m_Accel.gridSrch; z++ )
+			for (int x=0; x < m_Accel.gridSrch; x++ )
+				m_Accel.gridAdj [ cell++]  = ( y * m_Accel.gridRes.z+ z ) * m_Accel.gridRes.x +  x ;
 
 	// Done
-	dbgprintf ( "  Accel Grid: %d, Res: %dx%dx%d\n", m_Accel.gridTotal, (int) m_Accel.gridRes.x, (int) m_Accel.gridRes.y, (int) m_Accel.gridRes.z );		
+	dbgprintf ( "  Accel Grid: %d, Res: %dx%dx%d\n", m_Accel.gridTotal, (int) m_Accel.gridRes.x, (int) m_Accel.gridRes.y, (int) m_Accel.gridRes.z );
 }
 
 
@@ -829,7 +835,7 @@ void Flock2::InsertIntoGrid ()
 	if (m_gpu) {
 
 		#ifdef BUILD_CUDA
-			// Reset all grid cells to empty	
+			// Reset all grid cells to empty
 			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDCNT),	0,	m_Accel.gridTotal*sizeof(uint) ), "InsertParticlesCUDA", "cuMemsetD8", "AGRIDCNT", DEBUG_CUDA );
 			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDOFF),	0,	m_Accel.gridTotal*sizeof(uint) ), "InsertParticlesCUDA", "cuMemsetD8", "AGRIDOFF", DEBUG_CUDA );
 			cuCheck ( cuMemsetD8 ( m_Birds.gpu(FGCELL),		0,	numPoints*sizeof(int) ), "InsertParticlesCUDA", "cuMemsetD8", "FGCELL", DEBUG_CUDA );
@@ -843,43 +849,43 @@ void Flock2::InsertIntoGrid ()
 
 	} else {
 
-		// Insert into grid 
-		// Reset all grid cells to empty		
-		memset( m_Grid.bufUI(AGRIDCNT),	0,	m_Accel.gridTotal*sizeof(uint));		
+		// Insert into grid
+		// Reset all grid cells to empty
+		memset( m_Grid.bufUI(AGRIDCNT),	0,	m_Accel.gridTotal*sizeof(uint));
 		memset( m_Grid.bufUI(AGRIDOFF),	0,	m_Accel.gridTotal*sizeof(uint));
 		memset( m_Birds.bufUI(FGCELL),	0,	numPoints*sizeof(int));
-		memset( m_Birds.bufUI(FGNDX),	0,	numPoints*sizeof(int));		
+		memset( m_Birds.bufUI(FGNDX),	0,	numPoints*sizeof(int));
 
 		float poff = m_Accel.psmoothradius / m_Accel.sim_scale;
 
 		// Insert each particle into spatial grid
 		Vec3F gcf;
 		Vec3I gc;
-		int gs; 
+		int gs;
 		Vec3F ppos;
 		uint* pgcell =	  m_Birds.bufUI (FGCELL);
-		uint* pgndx =			m_Birds.bufUI (FGNDX);		
+		uint* pgndx =			m_Birds.bufUI (FGNDX);
 
 		Bird* b;
-	
-		for ( int n=0; n < numPoints; n++ ) {		
-		
+
+		for ( int n=0; n < numPoints; n++ ) {
+
 			b = (Bird*) m_Birds.GetElem( FBIRD, n);
 			ppos = b->pos;
 
-			gcf = (ppos - m_Accel.gridMin) * m_Accel.gridDelta; 
+			gcf = (ppos - m_Accel.gridMin) * m_Accel.gridDelta;
 			gc = Vec3I( int(gcf.x), int(gcf.y), int(gcf.z) );
 			gs = (gc.y * m_Accel.gridRes.z + gc.z)*m_Accel.gridRes.x + gc.x;
-	
+
 			if ( gc.x >= 1 && gc.x <= m_Accel.gridScanMax.x && gc.y >= 1 && gc.y <= m_Accel.gridScanMax.y && gc.z >= 1 && gc.z <= m_Accel.gridScanMax.z ) {
 				*pgcell = gs;
 				*pgndx = *m_Grid.bufUI(AGRIDCNT, gs);
-				(*m_Grid.bufUI(AGRIDCNT, gs))++;			
+				(*m_Grid.bufUI(AGRIDCNT, gs))++;
 			} else {
-				*pgcell = GRID_UNDEF;				
-			}					
+				*pgcell = GRID_UNDEF;
+			}
 			pgcell++;
-			pgndx++;		
+			pgndx++;
 		}
 
 	}
@@ -894,7 +900,7 @@ void Flock2::PrefixSumGrid ()
 			// PrefixSum - GPU
 			// Prefix Sum - determine grid offsets
 			int blockSize = SCAN_BLOCKSIZE << 1;
-			int numElem1 = m_Accel.gridTotal;		
+			int numElem1 = m_Accel.gridTotal;
 			int numElem2 = int ( numElem1 / blockSize ) + 1;
 			int numElem3 = int ( numElem2 / blockSize ) + 1;
 			int threads = SCAN_BLOCKSIZE;
@@ -934,10 +940,10 @@ void Flock2::PrefixSumGrid ()
 
 			// Counting Sort
 			//
-			// transfer particle data to temp buffers 
-			//  (required by gpu counting sort algorithm, gpu-to-gpu copy, no context sync needed)	
+			// transfer particle data to temp buffers
+			//  (required by gpu counting sort algorithm, gpu-to-gpu copy, no context sync needed)
 			m_Birds.CopyAllBuffers ( &m_BirdsTmp, DT_CUMEM );
-		
+
 			// sort
 			int numPoints = m_Params.num_birds;
 			void* args[1] = { &numPoints };
@@ -951,14 +957,14 @@ void Flock2::PrefixSumGrid ()
 		// cpu scan and sort is implemented to give identical output as gpu version,
 		// *except* that birds are not deep copied for cache coherence as they are on gpu.
 		// the grid cells will contain the same list of points in either case.
-		int numPoints = m_Params.num_birds;		
+		int numPoints = m_Params.num_birds;
 		int numCells = m_Accel.gridTotal;
-		uint* mgrid = (uint*) m_Grid.bufI(AGRID);		
-		uint* mgcnt = (uint*) m_Grid.bufI(AGRIDCNT);		
+		uint* mgrid = (uint*) m_Grid.bufI(AGRID);
+		uint* mgcnt = (uint*) m_Grid.bufI(AGRIDCNT);
 		uint* mgoff = (uint*) m_Grid.bufI(AGRIDOFF);
 
 		// compute prefix sums for offsets
-		int sum = 0;	
+		int sum = 0;
 		for (int n=0; n < numCells; n++) {
 			mgoff[n] = sum;
 			sum += mgcnt[n];
@@ -966,17 +972,17 @@ void Flock2::PrefixSumGrid ()
 
 		// compute master grid list
 		uint* pgcell = m_Birds.bufUI (FGCELL);
-		uint* pgndx = m_Birds.bufUI (FGNDX);		
+		uint* pgndx = m_Birds.bufUI (FGNDX);
 		int sort_ndx;
 		for (int k=0; k < numPoints; k++) {
 			mgrid[k] = GRID_UNDEF;
 		}
 		for (int j=0; j < numPoints; j++) {
 
-			if ( *pgcell != GRID_UNDEF ) {			
+			if ( *pgcell != GRID_UNDEF ) {
 				sort_ndx = mgoff [ *pgcell ] + *pgndx;
-				mgrid[ sort_ndx ] = j;			
-			} 
+				mgrid[ sort_ndx ] = j;
+			}
 			pgcell++;
 			pgndx++;
 		}
@@ -991,7 +997,7 @@ void Flock2::FindNeighbors ()
 
 		#ifdef BUILD_CUDA
 			// Find neighborhood (GPU)
-			//		
+			//
 			int numPoints = m_Params.num_birds;
 			void* args[1] = { &numPoints };
 			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FIND_NBRS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "FindNeighbors", "cuLaunch", "FUNC_FIND_NBRS", DEBUG_CUDA );
@@ -1002,50 +1008,70 @@ void Flock2::FindNeighbors ()
 		// Find neighborhood of each bird to compute:
 		// - near_j  - id of nearest bird
 		// - ave_pos - average centroid of neighbor birds
-		// - ave_vel - average velocity of neighbor birds	
+		// - ave_vel - average velocity of neighbor birds
 		//
 		float d = m_Accel.sim_scale;
 		float d2 = d * d;
-		float rd2 = (m_Accel.psmoothradius*m_Accel.psmoothradius) / d2;	
+		float rd2 = (m_Accel.psmoothradius*m_Accel.psmoothradius) / d2;
 		int	nadj = (m_Accel.gridRes.z + 1)*m_Accel.gridRes.x + 1;
 		int j;
 		uint cell;
-		Vec3F posi, posj, dist;	
+		Vec3F posi, posj, dist;
 		Vec3F diri, dirj;
 		Vec3F cdir;
 		float dsq;
 		float nearest, nearest_fwd;
-	
+
 		uint* grid = m_Grid.bufUI(AGRID);
 		uint* gridcnt = m_Grid.bufUI(AGRIDCNT);
 		uint* fgc = m_Grid.bufUI(FGCELL);
 
-		Bird *bi, *bj;
+		Bird *bi, *bj, *bk;
 
-		float birdang;		
-		
+		float birdang;
+
 		// topological distance
 		float sort_d_nbr[16];
 		int sort_j_nbr[16];
 		int sort_num = 0;
 		sort_d_nbr[0] = 10^5;
-		sort_j_nbr[0] = -1;		
+		sort_j_nbr[0] = -1;
 		int k, m;
 
-		// for each bird..
+		max_cluster_id = -1;
+		cluster_assignment.clear();
+
 		int numPoints = m_Params.num_birds;
+
+		// for each bird..
+		for (int i=0; i < numPoints; i++) {
+			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
+			bi->cluster_id = -1; // reset all cluster assignments
+		}
+
+		// for each bird..
 		for (int i=0; i < numPoints; i++) {
 
 			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
 			posi = bi->pos;
 
+			if(bi->cluster_id == -1) { // no cluster assigned yet for this bird
+				max_cluster_id ++;
+				bi->cluster_id = max_cluster_id;
+				vector<int> new_cluster(1);
+				new_cluster.at(0) = i;
+				cluster_assignment.push_back(new_cluster);
+
+				//printf("bird %d new cluster %d size %d \n", i, max_cluster_id, cluster_assignment.size());
+			}
+
 			// pre-compute for efficiency
 			diri = bi->vel;			diri.Normalize();
-		
+
 			// clear current bird info
 			bi->ave_pos.Set(0,0,0);
 			bi->ave_vel.Set(0,0,0);
-			bi->near_j = -1;			
+			bi->near_j = -1;
 			bi->t_nbrs = 0;
 			bi->r_nbrs = 0;
 
@@ -1064,7 +1090,7 @@ void Flock2::FindNeighbors ()
 					cell = gc + m_Accel.gridAdj[c];
 					int clast = m_Grid.bufUI(AGRIDOFF)[cell] + m_Grid.bufUI(AGRIDCNT)[cell];
 
-					for ( int cndx = m_Grid.bufUI(AGRIDOFF)[cell]; cndx < clast; cndx++ ) {		
+					for ( int cndx = m_Grid.bufUI(AGRIDOFF)[cell]; cndx < clast; cndx++ ) {
 
 							// get next possible neighbor
 							j = m_Grid.bufUI(AGRID)[cndx];
@@ -1078,17 +1104,36 @@ void Flock2::FindNeighbors ()
 
 							if ( dsq < rd2 ) {
 								// neighbor is within radius..
-								
-								// confirm bird is within forward field-of-view							
+
+								if(bj->cluster_id == -1) { // no cluster assigned yet for neighbor bird
+									bj->cluster_id = bi->cluster_id; // put both birds in same cluster
+									cluster_assignment.at(bi->cluster_id).push_back(j);
+								}
+								if(bj->cluster_id != bi->cluster_id) { // already assigned another cluster for neighbor bird, need to merge clusters
+									int merge_from_id = bj->cluster_id;
+									int merge_to_id = bi->cluster_id;
+
+									//printf("merge bird %d (cluster %d) to bird %d (cluster %d) \n", j, merge_from_id, i, merge_to_id);
+									for(unsigned int k = 0; k < cluster_assignment.at(merge_from_id).size(); k++) {
+										int kk = cluster_assignment.at(merge_from_id).at(k);
+										//printf("     bird %d -> %d\n", kk, merge_to_id);
+										bk = (Bird*) m_Birds.GetElem( FBIRD, cluster_assignment.at(merge_from_id).at(k));
+										bk->cluster_id = merge_to_id; // put birds in same cluster
+										cluster_assignment.at(merge_to_id).push_back(cluster_assignment.at(merge_from_id).at(k));
+									}
+									cluster_assignment.at(merge_from_id).clear();
+								}
+
+								// confirm bird is within forward field-of-view
 								dirj = posj - posi; dirj.Normalize();
 								birdang = diri.Dot (dirj);
 
 								if ( birdang > m_Params.fovcos ) {
 
-									// put into topological sorted list					
+									// put into topological sorted list
 									for (k = 0; dsq > sort_d_nbr[k] && k < sort_num;)
 										k++;
-					
+
 									// only insert if bird is closer than the top N
 									if (k <= sort_num) {
 										// shift others down (insertion sort)
@@ -1100,10 +1145,10 @@ void Flock2::FindNeighbors ()
 										}
 										sort_d_nbr[k] = dsq;
 										sort_j_nbr[k] = j;
-						
+
 										// max topological neighbors
 										if (++sort_num > m_Params.neighbors ) sort_num = m_Params.neighbors;
-									}		
+									}
 
 									// count bounary neighbors
 									bi->r_nbrs++;
@@ -1112,13 +1157,13 @@ void Flock2::FindNeighbors ()
 							}
 						}
 					}
-				}				
-		
+				}
+
 			// compute nearest and average among N (~7) topological neighbors
 			for (k=0; k < sort_num; k++) {
 				bj = (Bird*) m_Birds.GetElem( FBIRD, sort_j_nbr[k] );
 				bi->ave_pos += bj->pos;
-				bi->ave_vel += bj->vel;					
+				bi->ave_vel += bj->vel;
 			}
 			bi->near_j = sort_j_nbr[0];
 
@@ -1129,9 +1174,48 @@ void Flock2::FindNeighbors ()
 			}
 
 		}
-		
 	}
 }
+
+void Flock2::CalculateClusters ()
+{
+	//printf("max_cluster_id = %d \n", max_cluster_id);
+
+	if (m_gpu) {
+		printf("CalculateClusters: Cuda version not implemented yet!\n");
+	} else {
+		Bird *bi;
+		int numPoints = m_Params.num_birds;
+
+		// for each bird..
+		for (int i=0; i < numPoints; i++) {
+			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
+//			printf("bird %d, cluster %d \n", i, bi->cluster_id);
+		}
+	}
+
+	std::vector<Histogram> cluster_histogram(cluster_assignment.size());
+
+	for(unsigned int i = 0; i < cluster_assignment.size(); i++) {
+		/*printf("cluster %d: ", i);
+		for(unsigned int j = 0; j < cluster_assignment.at(i).size(); j++) {
+			printf("%d, ", cluster_assignment.at(i).at(j));
+		}
+		printf("\n");
+		*/
+
+		cluster_histogram.at(i).cluster_id = (int) i;
+		cluster_histogram.at(i).bird_cnt = (int) cluster_assignment.at(i).size();
+	}
+
+	std::sort(cluster_histogram.begin(), cluster_histogram.end(), std::greater<>());
+
+	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
+		printf("cluster %d, %d elem.\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt);
+	}
+
+}
+
 //----------------------------------------------------------------
 void Flock2::TrackBird() {
 
@@ -1203,7 +1287,7 @@ void Flock2::transitionPredState(int centroidReached, predState& currentState) {
 }
 
 float circleDelta (float b, float a)
-{	
+{
 	float d = b-a;
 	d = (d > 180) ? d-360 : (d<-180) ? d+360 : d;
 	//float q = fmod( fmin ( b-a, 360+b-a ), 180 );
@@ -1222,10 +1306,10 @@ void Flock2::DebugBird ( int id, std::string msg )
 			cuCtxSynchronize();
 		#endif
 	}
-	
+
 	for (n=0; n < m_Params.num_birds; n++) {
 		b = (Bird*) m_Birds.GetElem (FBIRD, n);
-		if (b->id == id) 
+		if (b->id == id)
 			break;
 	}
 	if (b->id == id) {
@@ -1239,18 +1323,18 @@ void Flock2::DebugBird ( int id, std::string msg )
 }
 
 void Flock2::UpdateFlockData ()
-{	
-	Vec3F centroid (0,0,0);	
-	float speed = 0;	
+{
+	Vec3F centroid (0,0,0);
+	float speed = 0;
 	float plift = 0, pdrag = 0;
 	float pfwd = 0, pturn=0, ptotal = 0;
 
 	// compute centroid & energy of birds
-	Bird* b;	
+	Bird* b;
 	for (int i=0; i < m_Params.num_birds; i++) {
-		b = (Bird*) m_Birds.GetElem( FBIRD, i);		
+		b = (Bird*) m_Birds.GetElem( FBIRD, i);
 		int gc = m_Birds.bufUI(FGCELL)[i];
-		if ( gc != GRID_UNDEF ) {		
+		if ( gc != GRID_UNDEF ) {
 			centroid += b->pos;
 			speed += b->speed;
 			plift += b->Plift;
@@ -1260,15 +1344,15 @@ void Flock2::UpdateFlockData ()
 			ptotal += b->Ptotal;
 		}
 	}
-	centroid *= (1.0f / m_Params.num_birds);	
-		
+	centroid *= (1.0f / m_Params.num_birds);
+
 	m_Flock.centroid = centroid;
 	m_Flock.speed = speed / m_Params.num_birds;
 	m_Flock.Plift = plift / m_Params.num_birds;
-	m_Flock.Pdrag = pdrag / m_Params.num_birds;	
-	m_Flock.Pfwd =  pfwd / m_Params.num_birds;	
-	m_Flock.Pturn = pturn / m_Params.num_birds;	
-	m_Flock.Ptotal = ptotal / m_Params.num_birds;		
+	m_Flock.Pdrag = pdrag / m_Params.num_birds;
+	m_Flock.Pfwd =  pfwd / m_Params.num_birds;
+	m_Flock.Pturn = pturn / m_Params.num_birds;
+	m_Flock.Ptotal = ptotal / m_Params.num_birds;
 
 	if ( m_frame > m_start_frame ) {
 		if ( m_frame % 8 == 0 ) {
@@ -1293,41 +1377,41 @@ typedef std::vector< Vec2F >	points_t;
 
 bool fit( double& A, double& B, double& C, points_t const& pnts )
 {
-    if( pnts.size() < 2 ) { return false; }
+	if( pnts.size() < 2 ) { return false; }
 
-    double X=0, Y=0, XY=0, X2=0, Y2=0;
+	double X=0, Y=0, XY=0, X2=0, Y2=0;
 
 		// Do all calculation symmetric regarding X and Y
-    for (int n=0; n < pnts.size(); n++) {
-        X  += pnts[n].x;
-        Y  += pnts[n].y;
-        XY += pnts[n].x * pnts[n].y;
-        X2 += pnts[n].x * pnts[n].x;
-        Y2 += pnts[n].y * pnts[n].y;
-    }
-    X  /= pnts.size();
-    Y  /= pnts.size();
-    XY /= pnts.size();
-    X2 /= pnts.size();
-    Y2 /= pnts.size();
-    A = - ( XY - X * Y );			// Common for both solution
-    double Bx = X2 - X * X;
-    double By = Y2 - Y * Y;
+	for (int n=0; n < pnts.size(); n++) {
+		X  += pnts[n].x;
+		Y  += pnts[n].y;
+		XY += pnts[n].x * pnts[n].y;
+		X2 += pnts[n].x * pnts[n].x;
+		Y2 += pnts[n].y * pnts[n].y;
+	}
+	X  /= pnts.size();
+	Y  /= pnts.size();
+	XY /= pnts.size();
+	X2 /= pnts.size();
+	Y2 /= pnts.size();
+	A = - ( XY - X * Y );			// Common for both solution
+	double Bx = X2 - X * X;
+	double By = Y2 - Y * Y;
 
-    if( fabs( Bx ) < fabs( By ) )	{	// Line is more Vertical.    
-        B = By;
-        std::swap(A,B);
-    } else {												// Line is more Horizontal.																		
-        B = Bx;											// Classical solution, when we expect more horizontal-like line
-    }
-    C = - ( A * X + B * Y );
+	if( fabs( Bx ) < fabs( By ) )	{	// Line is more Vertical.
+		B = By;
+		std::swap(A,B);
+	} else {												// Line is more Horizontal.
+		B = Bx;											// Classical solution, when we expect more horizontal-like line
+	}
+	C = - ( A * X + B * Y );
 
-    // Optional normalization:
-    double D = sqrt( A*A + B*B );
-    A /= D;
-    B /= D;
-    C /= D;
-    return true;
+	// Optional normalization:
+	double D = sqrt( A*A + B*B );
+	A /= D;
+	B /= D;
+	C /= D;
+	return true;
 }
 
 void Flock2::StartNextRun ()
@@ -1336,13 +1420,13 @@ void Flock2::StartNextRun ()
 	// printf ( "run, num_run, val, #bird, #peaks, peak_ave, g0_min,g0_max, g1_min,g1_max, g2_min,g2_max, g3_min,g3_max\n" );
 	#ifdef USE_FFTW
 		if (m_run >= 0) {
-		  fprintf ( m_runs_outfile, "%d,%d,%f, %d,%d,%f, %f, %f,%f, %f,%f, %f,%f, %f,%f\n", m_run, m_num_run, m_val.z, m_Params.num_birds, m_peak_cnt, m_peak_ave, m_peak_max, 
+		  fprintf ( m_runs_outfile, "%d,%d,%f, %d,%d,%f, %f, %f,%f, %f,%f, %f,%f, %f,%f\n", m_run, m_num_run, m_val.z, m_Params.num_birds, m_peak_cnt, m_peak_ave, m_peak_max,
 			  m_freq_gmin[0],m_freq_gmax[0], m_freq_gmin[1],m_freq_gmax[1], m_freq_gmin[2],m_freq_gmax[2], m_freq_gmin[3],m_freq_gmax[3] );
 
-			// close & reopen to save 
+			// close & reopen to save
 			fclose ( m_runs_outfile );
-			m_runs_outfile = fopen ( "output.csv", "a" );	
-		}	
+			m_runs_outfile = fopen ( "output.csv", "a" );
+		}
 	#endif
 
 	// advance run
@@ -1352,7 +1436,7 @@ void Flock2::StartNextRun ()
 	m_val.z = m_val.x + (m_val.y-m_val.x) * float(m_run) / m_num_run;
 
 	m_Params.reynolds_alignment = m_val.z;
-	
+
 	//m_Params.align_amt = m_val.z;
 
 	// reset simulation
@@ -1369,13 +1453,13 @@ void Flock2::OutputFFTW ( int frame )
 		float ang_accel;
 		Vec4F c;
 		float fm, fr, fi, v;
-		double fmag[ PLOT_RESY ];	
+		double fmag[ PLOT_RESY ];
 		float freq_wgt_ave;
 		int xi, y;
 
-		int N = m_fftw_N;	
+		int N = m_fftw_N;
 
-		float scalar = (m_method==0) ? 1 : 100.;  
+		float scalar = (m_method==0) ? 1 : 100.;
 
 		// Waiting for experiment to start
 		xi = frame - m_start_frame;
@@ -1394,7 +1478,7 @@ void Flock2::OutputFFTW ( int frame )
 		for (int f=0; f < N; f++) {
 			fmag[f] = 0;
 		}
-	
+
 		// Build sample matrix
 		// x-axis = time
 		// y-axis = bird id
@@ -1402,8 +1486,8 @@ void Flock2::OutputFFTW ( int frame )
 		double* s = m_samples + xi;									// for a given time x (column)
 		float ave = 0;
 		for (int i=0; i < m_Params.num_birds; i++) {
-			b = (Bird*) m_Birds.GetElem( FBIRD, i );		
-			y = b->id;		
+			b = (Bird*) m_Birds.GetElem( FBIRD, i );
+			y = b->id;
 			ang_accel = b->ang_accel.Length();				// sample from angular acceleration
 			if ( y > 0 && y < MAX_BIRDS) {
 				*(s + y*SAMPLES) = ang_accel * scalar;
@@ -1414,49 +1498,49 @@ void Flock2::OutputFFTW ( int frame )
 
 		// Compute STFT using windowed FFT
 		if ( xi > N ) {
-			for (y=0; y < m_Params.num_birds; y++) {					
-				// capture real-valued window			
+			for (y=0; y < m_Params.num_birds; y++) {
+				// capture real-valued window
 				s = m_samples + y*SAMPLES;
 				for (int k=0; k < N; k++) {
 					m_fftw_in[k] = s[ xi-N+k ] * 0.5 * (1- cos(2*PI*double(k)/(N-1)));		// moving window, with hanning filter
 				}
-				// execute fftw			
+				// execute fftw
 				fftw_execute ( m_fftw_plan );
 
-				// accumulate freq magnitudes			
+				// accumulate freq magnitudes
 				for (int f=0; f < N/2; f++) {
 					fr = m_fftw_out[f][0] * 2.0/N;			// real part
 					fi = m_fftw_out[f][1] * 2.0/N;			// imaginary part
 					fm = fr*fr + fi*fi;									// magnitude of given freq
-					fmag[f] += fm;				
+					fmag[f] += fm;
 				}
-			}	
+			}
 		}
 
 		// Get X-coordinate (time)
 		int x, xf;
 		int xdiv = 8;
-		x = xi / xdiv;	
+		x = xi / xdiv;
 		xf = (xi-N/2)/xdiv;
-	
+
 		if ( xi >= N/2 ) {
-			float energy = 0.0;		
+			float energy = 0.0;
 			float emin = 0;
-		
+
 			for (int g=0; g<4; g++) {
 				m_freq_grp[xi][g] = 0;
 			}
-			
-      float f_amp = 1.0;		// freq amplifier (for plot)
-		
-			// Plot Spectrogram - plot power of frequencies for current time		
-			for (int f=1; f < N/2; f++) {					
-				v = fmax(0, fmin( 1, 0.01f * 10. * log(fmag[f] + 1e-6) / log(10) ));		// dB						
-				
+
+	  float f_amp = 1.0;		// freq amplifier (for plot)
+
+			// Plot Spectrogram - plot power of frequencies for current time
+			for (int f=1; f < N/2; f++) {
+				v = fmax(0, fmin( 1, 0.01f * 10. * log(fmag[f] + 1e-6) / log(10) ));		// dB
+
 				v = v*v * f_amp;
 
 				if (f < N/4) {
-					energy += v;				
+					energy += v;
 				}
 				for (int g=0; g < 4; g++) {
 					if ( (g/4.0)*(N/2) < f && f < ((g+1)/4.0)*(N/2) ) {
@@ -1466,17 +1550,17 @@ void Flock2::OutputFFTW ( int frame )
 				c = m_plot[0].GetPixel ( xf, f );
 				c += Vec4F(v,v,v,1);
 				m_plot[0].SetPixel ( xf, f, c );
-			}				
-		
+			}
+
 			// plot and record total spectral energy
 			//
 			float	e_amp = 0.25f;				// energy amplifier (for plot)
 
-			
-			energy = energy * e_amp / (N/256.0f); 
-			m_fftw_energy [ xf ] = energy;					
 
-			// plot weighted ave. frequency 
+			energy = energy * e_amp / (N/256.0f);
+			m_fftw_energy [ xf ] = energy;
+
+			// plot weighted ave. frequency
 			Vec4F clrgrp[4];
 			clrgrp[0] = Vec4F(1,0,0,1);			//  low f, red
 			clrgrp[1] = Vec4F(1,1,0,1);			//  mid f, yellow
@@ -1484,14 +1568,14 @@ void Flock2::OutputFFTW ( int frame )
 			clrgrp[3] = Vec4F(0,0,1,1);			// vhig f, blue
 			for (int g=0; g < 4; g++) {
 				m_freq_grp[xi][g] = m_freq_grp[xi][g] * 0.5 / (N/256.0f);
-				m_plot[0].SetPixel ( xf, PLOT_RESY - m_freq_grp[xi][g]*400, clrgrp[g] );		
-			}		
-	
-		
+				m_plot[0].SetPixel ( xf, PLOT_RESY - m_freq_grp[xi][g]*400, clrgrp[g] );
+			}
 
-			// 200 hz = 1 sec		
+
+
+			// 200 hz = 1 sec
 			if ( xi % 200 == 0 ) {
-			
+
 				// run analysis
 				char txt[512];
 				int js = 0; //N/2)/xdiv;			// xf-25;
@@ -1502,7 +1586,7 @@ void Flock2::OutputFFTW ( int frame )
 				points_t pnts;
 				m_vis.clear();						// clear peak markers
 				m_lines.clear ();					// clear fit line(s)
-			
+
 				// pad first N/2 samples
 				//for (int j = 0; j <= N/2; j++) {
 			//					m_fftw_energy[j] = m_fftw_energy[N/2];
@@ -1514,8 +1598,8 @@ void Flock2::OutputFFTW ( int frame )
 					m_freq_grp[j][3] = m_freq_grp[N+1][3];
 				}
 				// smooth the energy func
-				memcpy (m_fftw_s1, m_fftw_energy, sizeof(float) * xf );			
-				
+				memcpy (m_fftw_s1, m_fftw_energy, sizeof(float) * xf );
+
 				for (int iter=0; iter < 5; iter++) {
 					m_fftw_s1[0] = m_fftw_s1[1];
 					m_fftw_s1[xf-1] = m_fftw_s1[xf-2];
@@ -1529,8 +1613,8 @@ void Flock2::OutputFFTW ( int frame )
 				// collect energy func as points
 				c = Vec4F(1, 1, 1, 1);
 				for (int j = 0; j < xf; j++) {
-					pnts.push_back ( Vec2F( j, m_fftw_s2[j] ) );				
-					m_plot[0].SetPixel( j, PLOT_RESY - m_fftw_s2[j]*400, c );			
+					pnts.push_back ( Vec2F( j, m_fftw_s2[j] ) );
+					m_plot[0].SetPixel( j, PLOT_RESY - m_fftw_s2[j]*400, c );
 					m_plot[0].SetPixel( j, PLOT_RESY - m_fftw_s2[j] * 400 + 1, c);
 					m_plot[0].SetPixel( j+1, PLOT_RESY - m_fftw_s2[j] * 400, c);
 					m_plot[0].SetPixel( j+1, PLOT_RESY - m_fftw_s2[j] * 400 + 1, c);
@@ -1542,38 +1626,38 @@ void Flock2::OutputFFTW ( int frame )
 					b = (-C/B);
 					m_lines.push_back ( Vec4F(0, PLOT_RESY-b*400, xf, PLOT_RESY-(m*xf+b)*400 ) );
 				}
-				// count peaks in energy			
-				e = m_fftw_s2;		
+				// count peaks in energy
+				e = m_fftw_s2;
 				m_peak_cnt = 0;
-				m_peak_ave = 0;			
+				m_peak_ave = 0;
 				m_peak_max = 0;
 				for (int j = 3; j < xf; j++) {
 					diff = fabs( e[3] - (m*j+b) );
-					if ( e[0] < e[2] && e[2] < e[3] && e[3] > e[4] && e[4] > e[6] && diff > 0.01 ) { 					
-						// compute diff to line					
+					if ( e[0] < e[2] && e[2] < e[3] && e[3] > e[4] && e[4] > e[6] && diff > 0.01 ) {
+						// compute diff to line
 						sprintf ( txt, "%4.1f", diff*100.0f);
 						m_vis.push_back ( vis_t( Vec3F( j, PLOT_RESY-e[3]*400, 0), 2.0f, Vec4F(1,1,1,1), txt ) );
 						if ( diff*100.0 > m_peak_max ) m_peak_max = diff*100.0f;
 						m_peak_ave += diff*100.0f;
-						m_peak_cnt++;					
+						m_peak_cnt++;
 					}
 					e++;
 				}
 				if ( m_peak_cnt > 0 ) {
-					m_peak_ave /= m_peak_cnt;				
+					m_peak_ave /= m_peak_cnt;
 				}
 				printf ( "peaks: %d, ave: %f, max: %f\n", m_peak_cnt, m_peak_ave, m_peak_max );
-			
+
 				// measure min/max frequency groups
 				for (int g=0; g < 4; g++) {
 					m_freq_gmin[g] = m_freq_grp[1][g];
-					m_freq_gmax[g] = m_freq_grp[1][g];				
+					m_freq_gmax[g] = m_freq_grp[1][g];
 					for (int j = 1; j <= xi; j++) {
 						if ( m_freq_grp[j][g] < m_freq_gmin[g] ) m_freq_gmin[g] = m_freq_grp[j][g];
 						if ( m_freq_grp[j][g] > m_freq_gmax[g] ) m_freq_gmax[g] = m_freq_grp[j][g];
-					}				
+					}
 				}
-				
+
 				//m_lines.push_back ( Vec4F(0, PLOT_RESY-m_freq_gmin[0]*400, xf, PLOT_RESY-m_freq_gmin[0]*400 ) );
 				//m_lines.push_back ( Vec4F(0, PLOT_RESY-m_freq_gmax[0]*400, xf, PLOT_RESY-m_freq_gmax[0]*400 ) );
 			}
@@ -1581,13 +1665,13 @@ void Flock2::OutputFFTW ( int frame )
 
 		// plot samples
 		s = m_samples + (N/2)*SAMPLES + x;
-		for (y = N/2; y < N; y++) {			
+		for (y = N/2; y < N; y++) {
 			v = (*s) * 0.05f / 5.f;
-			c = m_plot[0].GetPixel ( x, y);		
-			c += Vec4F(v, v, v, 1); 
+			c = m_plot[0].GetPixel ( x, y);
+			c += Vec4F(v, v, v, 1);
 			m_plot[0].SetPixel ( x, y, c );
 			s += SAMPLES;
-		}	
+		}
 
 		if ( xi % xdiv == 0 ) {
 			m_plot[0].Commit ();
@@ -1607,11 +1691,11 @@ for (int iter=0; iter < 500; iter++) {
 }
 c = Vec4F(1,1,1,1);
 for (int j=1; j < xf-1; j++) {
-	m_plot[0].SetPixel ( j, PLOT_RESY - m_fftw_s2[j], c );		
+	m_plot[0].SetPixel ( j, PLOT_RESY - m_fftw_s2[j], c );
 } */
 
 void Flock2::OutputPlot ( int what, int frame )
-{	
+{
 	Bird* b;
 	float ang_accel;
 	Vec4F c;
@@ -1619,16 +1703,16 @@ void Flock2::OutputPlot ( int what, int frame )
 
 	x = frame / 5;
 	if ( x >= PLOT_RESX ) return;
-	
+
 	for (int i=0; i < m_Params.num_birds; i++) {
 		b = (Bird*) m_Birds.GetElem( FBIRD, i );
 		y = min( b->id, PLOT_RESY );
 
 		if ( y < PLOT_RESY ) {
-			ang_accel = b->ang_accel.Length() * .002;		// 60 - classic			
+			ang_accel = b->ang_accel.Length() * .002;		// 60 - classic
 			c = m_plot[0].GetPixel ( x, y );
 			c += Vec4F(ang_accel, 0, 0, 0);
-			m_plot[0].SetPixel (x, y, c ); 
+			m_plot[0].SetPixel (x, y, c );
 		}
 	}
 	m_plot[0].Commit ();
@@ -1636,23 +1720,23 @@ void Flock2::OutputPlot ( int what, int frame )
 
 void Flock2::OutputPointCloudFiles ( int frame )
 {
-	Bird* b;	
+	Bird* b;
 	FILE* fp;
 	char fn[512];
 
-	// write flock data as PLY point cloud	
+	// write flock data as PLY point cloud
 	//
 	// how to read and plot with MATLAB:
 	//   frame = 1
 	//   pts = pcread ( "birds"+num2str(frame,'%04d')+".ply")
-	//   pcshow ( pts.Location, pts.Normal)  
+	//   pcshow ( pts.Location, pts.Normal)
 	//
 
 	// only record certain frames..
 	// - m_rec_start, skip until flocking settles
 	// - m_rec_step, skip every n-th frame
 	if ( frame > m_rec_start && (frame % m_rec_step)==0 ) {
-		
+
 		// make file numbers continuous
 		int file_num = (frame - m_rec_start)/m_rec_step;
 
@@ -1664,16 +1748,16 @@ void Flock2::OutputPointCloudFiles ( int frame )
 		fprintf ( fp, "element vertex %d\n", m_Params.num_birds );
 		fprintf ( fp, "property float x\n" );
 		fprintf ( fp, "property float y\n" );
-		fprintf ( fp, "property float z\n" );		
+		fprintf ( fp, "property float z\n" );
 		fprintf ( fp, "property float nx\n" );
 		fprintf ( fp, "property float ny\n" );
-		fprintf ( fp, "property float nz\n" );		
+		fprintf ( fp, "property float nz\n" );
 		fprintf ( fp, "end_header\n" );
 		// xyz (position) is the bird position
 		// nx,ny,nz (normal) is saved as the bird angular acceleration (but could store other bird variables)
 		// note: Y+ is up in simulation, exported with Z+ up
 		for (int i=0; i < m_Params.num_birds; i++) {
-			b = (Bird*) m_Birds.GetElem( FBIRD, i);				
+			b = (Bird*) m_Birds.GetElem( FBIRD, i);
 			fprintf ( fp, "%4.3f %4.3f %4.3f %4.3f %4.3f %4.3f\n", b->pos.x, b->pos.z, b->pos.y, b->ang_accel.x, b->ang_accel.z, b->ang_accel.y );
 		}
 		fclose ( fp );
@@ -1689,14 +1773,14 @@ void Flock2::AdvanceOrientationHoetzlein ()
 
 		#ifdef BUILD_CUDA
 			// Advance - GPU
-			//			
+			//
 			void* args[4] = { &m_time, &m_Params.DT, &m_Accel.sim_scale, &m_Params.num_birds };
 
 			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_ORIENT],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "Advance", "cuLaunch", "FUNC_ADVANCE", DEBUG_CUDA );
 
 			// Retrieve birds from GPU for rendering & visualization
 			m_Birds.Retrieve ( FBIRD );
-		
+
 			cuCtxSynchronize ();
 		#endif
 
@@ -1719,18 +1803,18 @@ void Flock2::AdvanceOrientationHoetzlein ()
 		Predator* p;
 
 		Vec3F centroid (0,50,0);
-		
+
 		for (int n=0; n < m_Params.num_birds; n++) {
 
 			b = (Bird*) m_Birds.GetElem( FBIRD, n);
 
-			b->clr.Set(0,0,0,0);	
+			b->clr.Set(0,0,0,0);
 
 			// Hoetzlein - Peripheral bird term
 			// Turn isolated birds toward flock centroid
 			float d = b->r_nbrs / m_Params.boundary_cnt;
 			if ( d < 1 ) {
-				b->clr.Set(1,.5,0, 1);	
+				b->clr.Set(1,.5,0, 1);
 				dirj = centroid - b->pos; dirj.Normalize();
 				dirj *= b->orient.inverse();
 				yaw = atan2( dirj.z, dirj.x )*RADtoDEG;
@@ -1740,56 +1824,56 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			}
 
 			if ( b->r_nbrs > 0 ) {
-				//--- Reynold's behaviors	
+				//--- Reynold's behaviors
 				// Rule 1. Avoidance - avoid nearest bird
-				//			
+				//
 				// 1a. Side neighbor avoidance
 				if ( b->near_j != -1) {
 					// get nearest bird
 					bj = (Bird*) m_Birds.GetElem(0, b->near_j);
 					dirj = bj->pos - b->pos;
-					dist = dirj.Length();		  
-			
-					if ( dist < m_Params.safe_radius ) {	
+					dist = dirj.Length();
 
-						// Angular avoidance			
-						dirj = (dirj/dist) * b->orient.inverse();													
+					if ( dist < m_Params.safe_radius ) {
+
+						// Angular avoidance
+						dirj = (dirj/dist) * b->orient.inverse();
 						yaw = atan2( dirj.z, dirj.x )*RADtoDEG;
-						pitch = asin( dirj.y )*RADtoDEG;		
+						pitch = asin( dirj.y )*RADtoDEG;
 						dist = fmax( 1.0f, fmin( dist*dist, 100.0f ));
 						b->target.z -= yaw *		m_Params.avoid_angular_amt / dist;
 						b->target.y -= pitch *  m_Params.avoid_angular_amt / dist;
 
-						// Power adjust				
+						// Power adjust
 						L = (b->vel.Length() - bj->vel.Length()) * m_Params.avoid_power_amt;
-						b->power = m_Params.avoid_power_ctr - L * L;				
+						b->power = m_Params.avoid_power_ctr - L * L;
 
-					}			
+					}
 				}
-			
-				if (b->power < m_Params.min_power) b->power = m_Params.min_power;
-				if (b->power > m_Params.max_power) b->power = m_Params.max_power;	
 
-				// Rule 2. Alignment - orient toward average direction		
+				if (b->power < m_Params.min_power) b->power = m_Params.min_power;
+				if (b->power > m_Params.max_power) b->power = m_Params.max_power;
+
+				// Rule 2. Alignment - orient toward average direction
 				dirj = b->ave_vel;
 				dirj.Normalize();
 				dirj *= b->orient.inverse();		// using inverse orient for world-to-local xform
 				yaw = atan2( dirj.z, dirj.x )*RADtoDEG;
 				pitch = asin( dirj.y )*RADtoDEG;
 				b->target.z += yaw   * m_Params.align_amt;
-				b->target.y += pitch * m_Params.align_amt;		 
+				b->target.y += pitch * m_Params.align_amt;
 
 				// Rule 3. Cohesion - steer toward neighbor centroid
 				dirj = b->ave_pos - b->pos;		// direction to ave nbrs
 				dirj.Normalize();
-				dirj *= b->orient.inverse();	// world-to-local xform		
-				yaw = atan2( dirj.z, dirj.x )*RADtoDEG;  
+				dirj *= b->orient.inverse();	// world-to-local xform
+				yaw = atan2( dirj.z, dirj.x )*RADtoDEG;
 				pitch = asin( dirj.y )*RADtoDEG;
 				b->target.z += yaw   * m_Params.cohesion_amt;
-				b->target.y += pitch * m_Params.cohesion_amt;		
-		
-			} 
-			
+				b->target.y += pitch * m_Params.cohesion_amt;
+
+			}
+
 			// RULE 4: bird-predator behaviour
 			///*
 			for (int m = 0; m < m_Params.num_predators; m++) {
@@ -1810,7 +1894,7 @@ void Flock2::AdvanceOrientationHoetzlein ()
 					b->clr = Vec4F(1, 0, 1, 1);
 					bird_count += 1;
 				}
-				
+
 			}
 		}
 
@@ -1823,11 +1907,11 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			#ifdef DEBUG_BIRD
 				if (b->id == DEBUG_BIRD) {
 					printf ("---- ADVANCE START (CPU), id %d, #%d\n", b->id, n );
-					printf (" orient:  %f, %f, %f, %f\n", b->orient.X, b->orient.Y, b->orient.Z, b->orient.W );		
-					printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );		
+					printf (" orient:  %f, %f, %f, %f\n", b->orient.X, b->orient.Y, b->orient.Z, b->orient.W );
+					printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );
 				}
 			#endif
-			
+
 			// Body orientation
 			fwd = Vec3F(1,0,0) * b->orient;			// X-axis is body forward
 			up  = Vec3F(0,1,0) * b->orient;			// Y-axis is body up
@@ -1835,17 +1919,17 @@ void Flock2::AdvanceOrientationHoetzlein ()
 
 			// Direction of motion
 			b->speed = b->vel.Length();
-			vaxis = b->vel / b->speed;	
+			vaxis = b->vel / b->speed;
 			if ( b->speed < m_Params.min_speed ) {
 				b->speed = m_Params.min_speed;				// birds dont go in reverse
 			}
 			if ( b->speed > m_Params.max_speed ) b->speed = m_Params.max_speed;
 			if ( b->speed==0) vaxis = fwd;
-			
-			b->orient.toEuler ( angs );			
+
+			b->orient.toEuler ( angs );
 
 			// Target corrections
-			angs.z = fmod (angs.z, 180.0 );												
+			angs.z = fmod (angs.z, 180.0 );
 			b->target.z = fmod ( b->target.z, 180 );										// yaw -180/180
 			b->target.x = circleDelta(b->target.z, angs.z) * 0.5;				// banking
 			b->target.y *= m_Params.pitch_decay;																				// level out
@@ -1858,7 +1942,7 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			b->ang_accel.x = (b->target.x - angs.x);
 			b->ang_accel.y = (b->target.y - angs.y);
 			b->ang_accel.z = circleDelta(b->target.z, angs.z);
-		
+
 			// Roll - Control input
 			// - orient the body by roll
 			float rx = m_Params.DT*1000.0f / m_Params.reaction_speed;
@@ -1866,9 +1950,9 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			b->orient *= ctrlq;	b->orient.normalize();
 
 			// Pitch & Yaw - Control inputs
-			// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs				
+			// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs
 			ctrlq.fromAngleAxis ( b->ang_accel.z * rx, up * -1.f );
-			vaxis *= ctrlq; vaxis.Normalize();	
+			vaxis *= ctrlq; vaxis.Normalize();
 			ctrlq.fromAngleAxis ( b->ang_accel.y * rx, right );
 			vaxis *= ctrlq; vaxis.Normalize();
 
@@ -1876,66 +1960,66 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			b->vel = vaxis * b->speed;
 			force = 0;
 
-			// Dynamic pressure		
-			airflow = b->speed + m_Params.wind.Dot ( fwd*-1.0f );		// airflow = air over wing due to speed + external wind			
+			// Dynamic pressure
+			airflow = b->speed + m_Params.wind.Dot ( fwd*-1.0f );		// airflow = air over wing due to speed + external wind
 			float dynamic_pressure = 0.5f * m_Params.air_density * airflow * airflow;
 
 			// Lift force
-			aoa = acos( fwd.Dot( vaxis ) )*RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward		
+			aoa = acos( fwd.Dot( vaxis ) )*RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward
  			if (isnan(aoa)) aoa = 1;
 			// CL = sin(aoa * 0.2) = coeff of lift, approximate CL curve with sin
-			L = (sin( aoa * 0.1)+0.5) * dynamic_pressure * m_Params.lift_factor *m_Params.wing_area;		// lift equation. L = CL (1/2 p v^2) A			
+			L = (sin( aoa * 0.1)+0.5) * dynamic_pressure * m_Params.lift_factor *m_Params.wing_area;		// lift equation. L = CL (1/2 p v^2) A
 			lift = up * L;
 			force += lift;
 
-			// Drag force	
+			// Drag force
 			drag = vaxis * dynamic_pressure * -m_Params.drag_factor  * m_Params.wing_area;			// drag equation. D = Cd (1/2 p v^2) A
-			force += drag; 
+			force += drag;
 
 			// Thrust force
 			thrust = fwd * b->power * m_Params.power;
 			force += thrust;
-	
-			// Integrate position		
-			accel = force / m_Params.mass;				// body forces	
+
+			// Integrate position
+			accel = force / m_Params.mass;				// body forces
 			accel += m_Params.gravity;						// gravity
 			accel += m_Params.wind * m_Params.air_density * m_Params.front_area;		// wind force. Fw = w^2 p * A, where w=wind speed, p=air density, A=frontal area
-	
+
 			b->pos += b->vel * m_Params.DT;
 
 			// Boundaries
 			if ( b->pos.x < m_Accel.bound_min.x ) b->pos.x = m_Accel.bound_max.x;
 			if ( b->pos.x > m_Accel.bound_max.x ) b->pos.x = m_Accel.bound_min.x;
 			if ( b->pos.z < m_Accel.bound_min.z ) b->pos.z = m_Accel.bound_max.z;
-			if ( b->pos.z > m_Accel.bound_max.z ) b->pos.z = m_Accel.bound_min.z;			  
+			if ( b->pos.z > m_Accel.bound_max.z ) b->pos.z = m_Accel.bound_min.z;
 
 			// Ground avoidance
 			L = b->pos.y - m_Accel.bound_min.y;
-			if ( L < m_Params.bound_soften ) {			
+			if ( L < m_Params.bound_soften ) {
 				L = (m_Params.bound_soften - L) / m_Params.bound_soften;
-				b->target.y += L * m_Params.avoid_ground_amt;			
+				b->target.y += L * m_Params.avoid_ground_amt;
 				// power up so we have enough lift to avoid the ground
 				b->power = m_Params.avoid_ground_power;
-			} 
-		
+			}
+
 			// Ceiling avoidance
 			L = m_Accel.bound_max.y - b->pos.y;
-			if ( L < m_Params.bound_soften  ) {	
+			if ( L < m_Params.bound_soften  ) {
 				L = (m_Params.bound_soften - L) / m_Params.bound_soften;
-				b->target.y -= L * m_Params.avoid_ceil_amt; 						
-			} 
+				b->target.y -= L * m_Params.avoid_ceil_amt;
+			}
 
 			// Ground condition
-			if (b->pos.y <= 0.00001 ) { 
+			if (b->pos.y <= 0.00001 ) {
 				// Ground forces
-				b->pos.y = 0; b->vel.y = 0; 
+				b->pos.y = 0; b->vel.y = 0;
 				b->accel += Vec3F(0,9.8,0);	// ground force (upward)
 				b->vel *= 0.9999;				// ground friction
-				b->orient.fromDirectionAndRoll ( Vec3F(fwd.x, 0, fwd.z), 0 );	// zero pitch & roll			
-			} 
-	
+				b->orient.fromDirectionAndRoll ( Vec3F(fwd.x, 0, fwd.z), 0 );	// zero pitch & roll
+			}
+
 			// Integrate velocity
-			b->vel += accel * m_Params.DT;		
+			b->vel += accel * m_Params.DT;
 
 			vaxis = b->vel;	vaxis.Normalize ();
 
@@ -1944,11 +2028,11 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			//  see: https://github.com/ramakarl/Flightsim
 			// this is an assumption yet much simpler/faster than integrating body orientation
 			// this way we dont need torque, angular vel, or rotational inertia.
-			// stalls are possible but not flat spins or 3D flying		
+			// stalls are possible but not flat spins or 3D flying
 			angvel.fromRotationFromTo ( fwd, vaxis, m_Params.dynamic_stability );
 			if ( !isnan(angvel.X) ) {
 				b->orient *= angvel;
-				b->orient.normalize();			
+				b->orient.normalize();
 			}
 
 			#ifdef DEBUG_BIRD
@@ -1956,13 +2040,13 @@ void Flock2::AdvanceOrientationHoetzlein ()
 					printf ("---- ADVANCE (CPU), id %d, #d\n", b->id, n );
 					printf (" speed:   %f\n", b->speed );
 					printf (" airflow: %f\n", airflow );
-					printf (" orients: %f, %f, %f, %f\n", b->orient.X, b->orient.Y, b->orient.Z, b->orient.W );		
-					printf (" angs:    %f, %f, %f\n", angs.x, angs.y, angs.z );		
-					printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );								
+					printf (" orients: %f, %f, %f, %f\n", b->orient.X, b->orient.Y, b->orient.Z, b->orient.W );
+					printf (" angs:	%f, %f, %f\n", angs.x, angs.y, angs.z );
+					printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );
 				}
 			#endif
 		}
-	}	
+	}
 }
 
 void Flock2::AdvanceVectorsReynolds ()
@@ -1971,25 +2055,25 @@ void Flock2::AdvanceVectorsReynolds ()
 
 		#ifdef BUILD_CUDA
 			// Advance - GPU
-			//			
+			//
 			void* args[4] = { &m_time, &m_Params.DT, &m_Accel.sim_scale, &m_Params.num_birds };
 			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_VECTORS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "Advance", "cuLaunch", "FUNC_ADVANCE", DEBUG_CUDA );
 
 			// Retrieve birds from GPU for rendering & visualization
 			m_Birds.Retrieve ( FBIRD );
-		
+
 			cuCtxSynchronize ();
 		#endif
 
 	} else {
 
 		// Advance - CPU
-		// Using classic Reynold's vector-based boids model 
+		// Using classic Reynold's vector-based boids model
 		//  1987, Craig Reynolds. "Flocks, herds and schools: A distributed behavioral model"
 		//
 		Vec3F dirj, force, accel;
-		Bird *b, *bj;		
-	
+		Bird *b, *bj;
+
 		//--- Reynold's model
 		//
 		for (int n=0; n < m_Params.num_birds; n++) {
@@ -1997,8 +2081,8 @@ void Flock2::AdvanceVectorsReynolds ()
 			b = (Bird*) m_Birds.GetElem( FBIRD, n);
 
 			force.Set(0,0,0);
-			
-			// Rule #1 - Avoidance			
+
+			// Rule #1 - Avoidance
 			// avoid nearest bird
 			if ( b->near_j != -1) {
 					// get nearest bird
@@ -2007,17 +2091,17 @@ void Flock2::AdvanceVectorsReynolds ()
 					dirj.Normalize ();
 					force -= dirj * m_Params.reynolds_avoidance;
 			}
-			// Rule #2. Alignment 
+			// Rule #2. Alignment
 			dirj = b->ave_vel - b->vel;
 			force += dirj * m_Params.reynolds_alignment;
 
 			// Rule #3. Cohesion
 			dirj = b->ave_pos - b->pos;
-			force += dirj * m_Params.reynolds_cohesion;		
+			force += dirj * m_Params.reynolds_cohesion;
 
-			// Integrate position	& velocity 
-			accel = force / m_Params.mass;	
-			b->vel += accel * m_Params.DT;	
+			// Integrate position	& velocity
+			accel = force / m_Params.mass;
+			b->vel += accel * m_Params.DT;
 			b->pos += b->vel * m_Params.DT;
 
 			// Boundaries
@@ -2032,9 +2116,9 @@ void Flock2::AdvanceVectorsReynolds ()
 }
 
 
-// -----------------------PREDATOR------------------------- 
+// -----------------------PREDATOR-------------------------
 
-void Flock2::Advance_pred() 
+void Flock2::Advance_pred()
 {
 	// Advance - CPU
 	//
@@ -2062,10 +2146,10 @@ void Flock2::Advance_pred()
 
 		p = (Predator*) m_Predators.GetElem(FPREDATOR, n);
 
-		dirj = m_Flock.centroid - p->pos;		
+		dirj = m_Flock.centroid - p->pos;
 		dist = dirj.Length();
 		dirj.Normalize();
-		dirj *= p->orient.inverse();		
+		dirj *= p->orient.inverse();
 
 		new_state = p->currentState;		// assume same state for now
 
@@ -2073,7 +2157,7 @@ void Flock2::Advance_pred()
 		if ( dist > 0) {
 			// only move predator if dist > 0
 			// (otherwise causes 'nan', div by 0)
-			
+
 			if (p->currentState == HOVER) {
 				//printf("current state = HOVER\n");
 
@@ -2082,8 +2166,8 @@ void Flock2::Advance_pred()
 				pitch = asin(dirj.y) * RADtoDEG;
 				p->target.z -= yaw * m_Params.avoid_pred_angular_amt;
 				p->target.y -= pitch * m_Params.avoid_pred_angular_amt;
-			
-				if (dist > 10.0f) {			
+
+				if (dist > 10.0f) {
 					new_state = ATTACK;				// predator far from flock, switch to attack
 					//printf("Distance reached, %f.\n", p->pos.y);
 				}
@@ -2118,9 +2202,9 @@ void Flock2::Advance_pred()
 
 				//printf("Following bird\n");
 
-				if (dist_target_bird < 5.5f) {				
+				if (dist_target_bird < 5.5f) {
 					new_state = HOVER;			// target bird caught, switch to eatting!
-				} else if (dist < 5.5f) { 
+				} else if (dist < 5.5f) {
 					new_state = HOVER;			// another bird caught, switch to hover
 				}
 			}
@@ -2147,13 +2231,13 @@ void Flock2::Advance_pred()
 		if (p->speed < m_Params.min_predspeed) p->speed = m_Params.min_predspeed;				// birds dont go in reverse // set min speed to predminspeed
 		if (p->speed > m_Params.max_predspeed) p->speed = m_Params.max_predspeed;
 		if (p->speed == 0) {
-			vaxis = fwd;		
+			vaxis = fwd;
 		} else {
 			vaxis = p->vel / p->speed;
 		}
 		if ( isnan(vaxis.x) ) {
 			bool stop=true;
-		}		
+		}
 
 		p->orient.toEuler(angs);
 
@@ -2179,30 +2263,30 @@ void Flock2::Advance_pred()
 		p->orient *= ctrlq;	p->orient.normalize();
 
 		// Pitch & Yaw - Control inputs
-		// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs				
+		// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs
 		ctrlq.fromAngleAxis(p->ang_accel.z * rx, up * -1.f);
 		vaxis *= ctrlq; vaxis.Normalize();
 		ctrlq.fromAngleAxis(p->ang_accel.y * rx, right);
-		vaxis *= ctrlq; vaxis.Normalize();	
+		vaxis *= ctrlq; vaxis.Normalize();
 
-		// Adjust velocity vector		
+		// Adjust velocity vector
 		p->vel = vaxis * p->speed;
 
 		force = 0;
 
-		// Dynamic pressure		
-		airflow = p->speed + m_Params.wind.Dot(fwd * -1.0f);		// airflow = air over wing due to speed + external wind			
+		// Dynamic pressure
+		airflow = p->speed + m_Params.wind.Dot(fwd * -1.0f);		// airflow = air over wing due to speed + external wind
 		dynamic_pressure = 0.5f * m_Params.air_density * airflow * airflow;
 
 		// Lift force
-		aoa = acos(fwd.Dot(vaxis)) * RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward		
+		aoa = acos(fwd.Dot(vaxis)) * RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward
 		if (isnan(aoa)) aoa = 1;
 		// CL = sin(aoa * 0.2) = coeff of lift, approximate CL curve with sin
 		L = sin(aoa * 0.2) * dynamic_pressure * m_Params.lift_factor * 0.5;		// lift equation. L = CL (1/2 p v^2) A
 		lift = up * L;
 		force += lift;
 
-		// Drag force	
+		// Drag force
 		drag = vaxis * dynamic_pressure * m_Params.drag_factor * -1.0f;			// drag equation. D = Cd (1/2 p v^2) A
 		force += drag;
 
@@ -2210,7 +2294,7 @@ void Flock2::Advance_pred()
 		thrust = fwd * p->power;
 		force += thrust;
 
-		// Integrate position		
+		// Integrate position
 		accel = force / m_Params.pred_mass;				// body forces	// changed mass from 0.1 to 0.8
 		accel += m_Params.gravity;						// gravity
 		accel += m_Params.wind * m_Params.air_density * m_Params.front_area;		// wind force. Fw = w^2 p * A, where w=wind speed, p=air density, A=frontal area
@@ -2245,13 +2329,13 @@ void Flock2::Advance_pred()
 			p->pos.y = 0; p->vel.y = 0;
 			p->accel += Vec3F(0, 9.8, 0);	// ground force (upward)
 			p->vel *= 0.9999;				// ground friction
-			p->orient.fromDirectionAndRoll(Vec3F(fwd.x, 0, fwd.z), 0);	// zero pitch & roll			
+			p->orient.fromDirectionAndRoll(Vec3F(fwd.x, 0, fwd.z), 0);	// zero pitch & roll
 		}
 
 		// Integrate velocity
 		p->vel += accel * m_Params.DT;
 
-		vaxis = p->vel;	
+		vaxis = p->vel;
 		vaxis.Normalize();
 
 		// Update Orientation
@@ -2259,7 +2343,7 @@ void Flock2::Advance_pred()
 		//  see: https://github.com/ramakarl/Flightsim
 		// this is an assumption yet much simpler/faster than integrating body orientation
 		// this way we dont need torque, angular vel, or rotational inertia.
-		// stalls are possible but not flat spins or 3D flying		
+		// stalls are possible but not flat spins or 3D flying
 		angvel.fromRotationFromTo(fwd, vaxis, m_Params.dynamic_stability);
 		if (!isnan(angvel.X)) {
 			p->orient *= angvel;
@@ -2284,7 +2368,7 @@ void Flock2::SelectBird (float x, float y)
 	best_dist = 10^5;
 
 	// find the bird nearest to camera ray
-	for (int i=0; i < m_Params.num_birds; i++) {		
+	for (int i=0; i < m_Params.num_birds; i++) {
 		b = (Bird*) m_Birds.GetElem( FBIRD, i );
 
 		q = projectPointLine( b->pos, rpos, rpos+rdir );
@@ -2296,7 +2380,7 @@ void Flock2::SelectBird (float x, float y)
 	}
 
 	// set as selection
-	// *note* due to GPU sort, the array index of selected bird 
+	// *note* due to GPU sort, the array index of selected bird
 	// may change frame-to-frame. therefore, selection is the bird ID.
 	if ( best_dist < 5 ) {
 		m_bird_sel = best_id;
@@ -2308,12 +2392,12 @@ void Flock2::SelectBird (float x, float y)
 void Flock2::Graph ( int id, float y, Vec4F clr, Vec2F scal)
 {
 	if ( id >= m_graph.size() ) {
-		while (id >= m_graph.size()) {			
+		while (id >= m_graph.size()) {
 			graph_t ng;
 			ng.x = 0;
 			memset ( &ng.y[0], 0, 2048 * sizeof(float) );
 			ng.clr = clr;
-			ng.scal = scal;			
+			ng.scal = scal;
 			m_graph.push_back ( ng );
 		}
 	}
@@ -2328,7 +2412,7 @@ void Flock2::VisualizePredators ()
 	Predator* p;
 	char msg[1024];
 	Vec4F tc (1,1,1,1);
-	
+
 	// predator information
 	for (int n = 0; n < m_Predators.GetNumElem(FPREDATOR); n++) {
 		p = (Predator*)m_Predators.GetElem(FPREDATOR, n);
@@ -2343,7 +2427,7 @@ void Flock2::VisualizePredators ()
 			sprintf ( msg, "predator %d currentState is INVALID", n );
 		drawText ( Vec2F(10, 30 + 20*n), msg, tc );
 	}
-	
+
 }
 
 void Flock2::VisualizeSelectedBird ()
@@ -2354,9 +2438,9 @@ void Flock2::VisualizeSelectedBird ()
 	if (m_bird_sel==-1) return;
 
 	// search for the index of this bird
-	m_vis.clear ();	
+	m_vis.clear ();
 	Bird* b;
-	int ndx = -1;	
+	int ndx = -1;
 	for (int i=0; i < m_Params.num_birds; i++) {
 		b = (Bird*) m_Birds.GetElem ( FBIRD, i );
 		if ( b->id == m_bird_sel )  {
@@ -2373,24 +2457,24 @@ void Flock2::VisualizeSelectedBird ()
 	m_bird_ndx = ndx;
 
 	// bird information
-	char msg[1024]; 
+	char msg[1024];
 	Vec4F tc (1,1,1,1);
 	sprintf ( msg, "thrust:  %4.3f N", b->thrust.Length() );	drawText ( Vec2F(10, 30), msg, tc );
-	sprintf ( msg, "drag:    %4.3f N", b->drag.Length() );		drawText ( Vec2F(10, 50), msg, tc );
-	sprintf ( msg, "lift:    %4.3f N", b->lift.Length() );		drawText ( Vec2F(10, 70), msg, tc );
+	sprintf ( msg, "drag:	%4.3f N", b->drag.Length() );		drawText ( Vec2F(10, 50), msg, tc );
+	sprintf ( msg, "lift:	%4.3f N", b->lift.Length() );		drawText ( Vec2F(10, 70), msg, tc );
 	float LD = b->lift.Length() / b->drag.Length();
-	sprintf ( msg, "L/D:     %4.1f", LD );				  					drawText ( Vec2F(10, 90), msg, tc );
+	sprintf ( msg, "L/D:	 %4.1f", LD );				  					drawText ( Vec2F(10, 90), msg, tc );
 	sprintf ( msg, "gravity: %4.3f N", b->gravity.Length() );	drawText ( Vec2F(10, 110), msg, tc );
 	sprintf ( msg, "Plift:   %4.3f watts", b->Plift );				drawText ( Vec2F(10, 130), msg, tc );
 	sprintf ( msg, "Pdrag:   %4.3f watts", b->Pdrag );				drawText ( Vec2F(10, 150), msg, tc );
-	sprintf ( msg, "Pfwd:    %4.6f watts", b->Pfwd );				drawText ( Vec2F(10, 170), msg, tc );
+	sprintf ( msg, "Pfwd:	%4.6f watts", b->Pfwd );				drawText ( Vec2F(10, 170), msg, tc );
 	sprintf ( msg, "Pturn:   %4.6f watts", b->Pturn );			drawText ( Vec2F(10, 190), msg, tc );
 	// Pfwd = Pprof + Ppara   (Pfwd = profile + parasitic power, and Pdrag is already included)
 	float P = b->Plift + b->Pfwd + b->Pturn;
 	sprintf ( msg, "Ptotal:  %4.3f watts", P );								drawText ( Vec2F(10, 210), msg, tc );
 	sprintf ( msg, "speed:   %4.3f m/s", b->speed );					drawText ( Vec2F(10, 230), msg, tc );
-	sprintf ( msg, "power:   %4.3f joules", b->power * m_Params.power ); drawText ( Vec2F(10, 250), msg, tc );		
-		
+	sprintf ( msg, "power:   %4.3f joules", b->power * m_Params.power ); drawText ( Vec2F(10, 250), msg, tc );
+
 	sprintf ( msg, "ave. lift:  %4.3f watts / bird", m_Flock.Plift );		drawText ( Vec2F(10, 280), msg, tc );
 	sprintf ( msg, "ave. drag:  %4.3f watts / bird", m_Flock.Pdrag );		drawText ( Vec2F(10, 300), msg, tc );
 	sprintf ( msg, "ave. fwd:   %4.6f watts / bird", m_Flock.Pfwd );		drawText ( Vec2F(10, 320), msg, tc );
@@ -2404,7 +2488,7 @@ void Flock2::VisualizeSelectedBird ()
 	// visualize neighborhood radius (yellow)
 	m_vis.push_back ( vis_t( b->pos, m_Accel.psmoothradius, Vec4F(1,1,0,1), "" ) );
 
-	// visulize neighbors		
+	// visulize neighbors
 	if (m_gpu) {
 		#ifdef BUILD_CUDA
 			m_Birds.Retrieve ( FGCELL );
@@ -2413,12 +2497,12 @@ void Flock2::VisualizeSelectedBird ()
 		#endif
 	}
 	int gc = m_Birds.bufUI(FGCELL)[ ndx ];
-	if ( gc != GRID_UNDEF ) {			
+	if ( gc != GRID_UNDEF ) {
 		Bird* bj;
 		float dsq, birdang, ave_dist = 0;
 		Vec3F dist, diri;
 		diri = b->vel; diri.Normalize();
-		uint j, cell, ncnt = 0;			
+		uint j, cell, ncnt = 0;
 
 		// find neighbors
 		float rd2 = (m_Accel.psmoothradius*m_Accel.psmoothradius) / (m_Accel.sim_scale * m_Accel.sim_scale);
@@ -2426,15 +2510,15 @@ void Flock2::VisualizeSelectedBird ()
 		for (int c=0; c < m_Accel.gridAdjCnt; c++) {
 			cell = gc + m_Accel.gridAdj[c];
 			int clast = m_Grid.bufUI(AGRIDOFF)[cell] + m_Grid.bufUI(AGRIDCNT)[cell];
-			for ( int cndx = m_Grid.bufUI(AGRIDOFF)[cell]; cndx < clast; cndx++ ) {		
+			for ( int cndx = m_Grid.bufUI(AGRIDOFF)[cell]; cndx < clast; cndx++ ) {
 					// get next possible neighbor
 					j = m_Grid.bufUI(AGRID)[cndx];
 					if (j==ndx) continue;
 					bj = (Bird*) m_Birds.GetElem ( FBIRD, j );
 					dist = bj->pos - b->pos;
 					dsq = (dist.x*dist.x + dist.y*dist.y + dist.z*dist.z);
-					
-					if ( dsq < rd2 ) {							
+
+					if ( dsq < rd2 ) {
 						dsq = sqrt(dsq);
 						dist /= dsq;
 						birdang = diri.Dot ( dist );
@@ -2452,7 +2536,7 @@ void Flock2::VisualizeSelectedBird ()
 			ave_dist /= ncnt;
 			// printf ( "ave dist: %f\n", ave_dist );
 		}
-	}					
+	}
 
 }
 
@@ -2482,6 +2566,9 @@ void Flock2::Run ()
 	//--- Find neighbors
 	FindNeighbors ();
 
+	//--- Calculate cluster metrics
+	CalculateClusters ();
+
 	//--- Advance birds
 	if ( m_method==0 ) {
 		AdvanceOrientationHoetzlein ();			// 2024 Hoetzlein, Flock2
@@ -2490,13 +2577,13 @@ void Flock2::Run ()
 	}
 
 	//--- Advance predators
-	Advance_pred();	
+	Advance_pred();
 
 	//--- Update flock data (centroid, energy)
 	UpdateFlockData ();
 
-	//--- Outputs 
-	// OutputPointCloudFiles ( m_frame );  
+	//--- Outputs
+	// OutputPointCloudFiles ( m_frame );
 	// OutputPlot ( 0, m_frame );
 	if (m_analysis) {
 		OutputFFTW ( m_frame );
@@ -2515,7 +2602,7 @@ void Flock2::Run ()
 
 	m_time += m_Params.DT;
 	m_frame++;
-	
+
 	runcount += 1;
 
 }
@@ -2531,9 +2618,9 @@ void Flock2::DrawAccelGrid ()
 	for (r.y=0; r.y < m_Accel.gridRes.y; r.y++) {
 		for (r.z=0; r.z < m_Accel.gridRes.z; r.z++) {
 			for (r.x=0; r.x < m_Accel.gridRes.x; r.x++) {
-				
+
 				a = m_Accel.gridMin + r / m_Accel.gridDelta;
-				b = a + (Vec3F(0.99f,0.99f,0.99f) / m_Accel.gridDelta );								
+				b = a + (Vec3F(0.99f,0.99f,0.99f) / m_Accel.gridDelta );
 
 				v = fmin(1.0, float(*gc)/10.0f);
 
@@ -2564,7 +2651,7 @@ void Flock2::CameraToCockpit(int n )
 {
 	Bird* b = (Bird*) m_Birds.GetElem(0, n);
 
-	// View direction	
+	// View direction
 	Vec3F fwd = b->vel; fwd.Normalize();
 	Vec3F angs;
 	b->orient.toEuler ( angs );
@@ -2573,8 +2660,8 @@ void Flock2::CameraToCockpit(int n )
 	m_cam_fwd.Normalize();
 
 	// Set eye level above centerline
-	Vec3F p = b->pos + Vec3F(0,2,0);	  
-	
+	Vec3F p = b->pos + Vec3F(0,2,0);
+
 	m_cam->setDirection ( p, p + m_cam_fwd, -angs.x );
 }
 
@@ -2586,12 +2673,12 @@ bool Flock2::init ()
 	appSetVSync( false );
 
 	// PERF_INIT ( 64, false, true, false, 0, "");
-	
+
 	m_running = true;
 	m_cockpit_view = false;
 	m_draw_mesh = 0;
-	m_draw_grid = false;	
-	m_cam_mode = 0;	
+	m_draw_grid = false;
+	m_cam_mode = 0;
 
 	m_rec_start = 1000;
 	m_rec_step = 10;
@@ -2600,30 +2687,30 @@ bool Flock2::init ()
 	m_frame = 0;
 	m_rnd.seed(m_seed);
 
-	// Build FFTW arrays 
-	#ifdef USE_FFTW		
+	// Build FFTW arrays
+	#ifdef USE_FFTW
 		m_fftw_N = 512;
 		m_fftw_in = (double*) malloc ( sizeof(double) * m_fftw_N );
 		m_fftw_out = (fftw_complex*) fftw_malloc ( sizeof(fftw_complex) * m_fftw_N);
-		m_fftw_plan = fftw_plan_dft_r2c_1d ( m_fftw_N, m_fftw_in, m_fftw_out, FFTW_ESTIMATE );	
-		
+		m_fftw_plan = fftw_plan_dft_r2c_1d ( m_fftw_N, m_fftw_in, m_fftw_out, FFTW_ESTIMATE );
+
 		// *NOTE* m_samples matrix could be large. SAMPLES=16384, MAX_BIRD=65535,
 		// samples = 8 bytes * 16384 * 65535 = 8.5 GB
 		m_samples = (double*) malloc ( sizeof(double) * SAMPLES * MAX_BIRDS );
 
-		memset ( m_fftw_energy, 0, 32767*sizeof(float) );		
+		memset ( m_fftw_energy, 0, 32767*sizeof(float) );
 	#endif
 
 	// disable GPU if no cuda
 	#ifndef BUILD_CUDA
-		m_gpu = false;  
+		m_gpu = false;
 	#endif
 
 	m_plot[0].Resize ( PLOT_RESX, PLOT_RESY, ImageOp::RGBA32F, DT_CPU | DT_GLTEX );
-	m_plot[0].Fill ( 0,0,0,0 );	
+	m_plot[0].Fill ( 0,0,0,0 );
 
 	m_plot[1].Resize ( PLOT_RESX, PLOT_RESY, ImageOp::RGBA32F, DT_CPU | DT_GLTEX );
-	m_plot[1].Fill ( 0,0,0,0 );	
+	m_plot[1].Fill ( 0,0,0,0 );
 
 	m_kernels_loaded = false;
 
@@ -2648,7 +2735,7 @@ bool Flock2::init ()
 	//
 	m_run = -1;																				// setup run
 	m_num_run = 20;																		// number of samples points
-	m_start_frame = 0.0f / m_Params.DT;							// settling time (secs), before measurements start	
+	m_start_frame = 0.0f / m_Params.DT;							// settling time (secs), before measurements start
 	m_end_frame = 40.0f /m_Params.DT + m_start_frame; // end time (secs)
 
 	// tests
@@ -2663,13 +2750,13 @@ bool Flock2::init ()
 
 
 	m_val.z = float(m_val.y-m_val.x) / m_num_run;
-	m_runs_outfile = fopen ( "output.csv", "wt" );	
+	m_runs_outfile = fopen ( "output.csv", "wt" );
 	fprintf ( m_runs_outfile, "run, num_run, val, #bird, #peaks, peak_ave, peak_max, g0_min,g0_max, g1_min,g1_max, g2_min,g2_max, g3_min,g3_max\n" );
 
 	StartNextRun ();				// this will call Reset
-	
+
 	// Load 3D mesh
-	// LoadMesh (0, "starling_low_poly.obj", 5.0 );	
+	// LoadMesh (0, "starling_low_poly.obj", 5.0 );
 	// LoadMesh (1, "putto.obj", 2.0);
 
 	return true;
@@ -2677,12 +2764,12 @@ bool Flock2::init ()
 
 
 void Flock2::LoadMesh (int i, std::string name, float scale)
-{	
+{
 	// Allocate mesh object
 	m_obj[i].mesh = new MeshX;
 	m_obj[i].name = name;
-	
-// Load geometry from disk		
+
+// Load geometry from disk
 	std::string fpath;
 	if (!getFileLocation(name, fpath))	{ dbgprintf("ERROR: Unable to find %s\n", name.c_str()); exit(-2);	}
 	if (!m_obj[i].mesh->Load(fpath, scale))					{ dbgprintf("ERROR: Unable to load %s\n", name.c_str());	exit(-3); }
@@ -2700,7 +2787,7 @@ void Flock2::LoadMesh (int i, std::string name, float scale)
 		glGenBuffers(1, (GLuint*)&m_obj[i].mVBO[VBO_CLR]);
 		glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_obj[i].mVBO[VBO_CLR]);
 		// MeshX stores colors as uint (RGBA), which the gxLib shader accept directly as uint.
-		glBufferDataARB(GL_ARRAY_BUFFER_ARB, m_obj[i].mesh->GetBufSize(BVERTCLR), m_obj[i].mesh->GetBufData(BVERTCLR), GL_DYNAMIC_DRAW);		
+		glBufferDataARB(GL_ARRAY_BUFFER_ARB, m_obj[i].mesh->GetBufSize(BVERTCLR), m_obj[i].mesh->GetBufData(BVERTCLR), GL_DYNAMIC_DRAW);
 	}
 	if (m_obj[i].mesh->isActive(BVERTNORM)) {
 		glGenBuffers(1, (GLuint*)&m_obj[i].mVBO[VBO_NORM]);
@@ -2714,11 +2801,11 @@ void Flock2::LoadMesh (int i, std::string name, float scale)
 	}
 	if (m_obj[i].mesh->isActive(BFACEV3)) {
 		glGenBuffers(1, (GLuint*)&m_obj[i].mVBO[VBO_FACES]);
-		glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, m_obj[i].mVBO[VBO_FACES]);		
+		glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, m_obj[i].mVBO[VBO_FACES]);
 		glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB, m_obj[i].mesh->GetBufSize(BFACEV3), m_obj[i].mesh->GetBufData(BFACEV3), GL_DYNAMIC_DRAW);
-		
+
 		#ifdef LARGE_MESHES
-			// MeshX supports very large meshes natively, with int64_t so we 
+			// MeshX supports very large meshes natively, with int64_t so we
 			// need to repack 64-bit vertex indices into 32-bits for OpenGL.
 			int ndx_cnt = m_obj[i].mesh->GetBufSize(BFACEV3) / sizeof(int64_t);
 			int repack_sz = ndx_cnt * sizeof(int32_t);
@@ -2730,13 +2817,13 @@ void Flock2::LoadMesh (int i, std::string name, float scale)
 			}
 			glBufferDataARB(GL_ELEMENT_ARRAY_BUFFER_ARB, repack_sz, repack_buf, GL_DYNAMIC_DRAW);
 			free(repack_buf);
-		#endif			
+		#endif
 	}
 }
 
 void Flock2::SketchMesh (int i)
 {
-	// sketch mesh face-by-face 
+	// sketch mesh face-by-face
 	Vec3F n, V;
 	Vec3F v0, v1, v2;
 	Vec3F n0, n1, n2;
@@ -2750,16 +2837,16 @@ void Flock2::SketchMesh (int i)
 	int num_tri = m_obj[i].mesh->GetNumElem(BFACEV3);
 
 	int lines = 1;
-	float normals = 0.01f;		// 0.01f 
+	float normals = 0.01f;		// 0.01f
 
 	for (int i = 0; i < num_tri; i++) {
 		f = (AttrV3*) m_obj[i].mesh->GetElem(BFACEV3, i);
 		// get face vertices & normals
 		v0 = *m_obj[i].mesh->GetVertPos(f->v1);		v1 = *m_obj[i].mesh->GetVertPos(f->v2);		v2 = *m_obj[i].mesh->GetVertPos(f->v3);
 		n0 = *m_obj[i].mesh->GetVertNorm(f->v1);		n1 = *m_obj[i].mesh->GetVertNorm(f->v2);		n2 = *m_obj[i].mesh->GetVertNorm(f->v3);
-		
+
 		if (m_obj[i].mesh->isActive(BVERTCLR)) {
-			c0 = *m_obj[i].mesh->GetVertClr(f->v1);	    c1 = *m_obj[i].mesh->GetVertClr(f->v2);	    c2 = *m_obj[i].mesh->GetVertClr(f->v3);
+			c0 = *m_obj[i].mesh->GetVertClr(f->v1);		c1 = *m_obj[i].mesh->GetVertClr(f->v2);		c2 = *m_obj[i].mesh->GetVertClr(f->v3);
 		}
 		else {
 			c0 = COLORA(1, 1, 1, 1); c1 = COLORA(1, 1, 1, 1); c2 = COLORA(1, 1, 1, 1);
@@ -2769,7 +2856,7 @@ void Flock2::SketchMesh (int i)
 			drawLine3D(v0, v1, lclr);			// wire mesh
 			drawLine3D(v1, v2, lclr);
 			drawLine3D(v2, v0, lclr);
-			
+
 			/* if (m_draw_normals) {
 				drawLine3D(v0, v0 + n0 * normals, Vec4F(0, 1, 1, 0.5));
 				drawLine3D(v1, v1 + n1 * normals, Vec4F(0, 1, 1, 0.5));
@@ -2780,14 +2867,14 @@ void Flock2::SketchMesh (int i)
 }
 
 void Flock2::RenderBirdsWithMesh (int i)
-{	
+{
 	// Bind mesh geometry to shader slots
 	int grp = 0;
 
 	// bind pos
 	glEnableVertexAttribArray(slotPos);
 	glBindBuffer(GL_ARRAY_BUFFER, m_obj[i].mVBO[VBO_POS]);
-	glVertexAttribPointer(slotPos, 3, GL_FLOAT, GL_FALSE, 0x0, 0);		// Bind vertices				
+	glVertexAttribPointer(slotPos, 3, GL_FLOAT, GL_FALSE, 0x0, 0);		// Bind vertices
 
 	// bind normals
 	if (m_obj[i].mVBO[VBO_NORM] != VBO_NULL) {
@@ -2818,25 +2905,25 @@ void Flock2::RenderBirdsWithMesh (int i)
 		glDisableVertexAttribArray(slotClr);
 		glVertexAttribI1ui(slotClr, COLORA(1, 1, 1, 1));	// value when not bound
 	}
-	// bind face indices		
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_obj[i].mVBO[VBO_FACES]);				// Bind face indices		
+	// bind face indices
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_obj[i].mVBO[VBO_FACES]);				// Bind face indices
 
 	Matrix4F model;
 
 	// Render birds
-	Bird* b;	
-	for (int n = 0; n < m_Birds .GetNumElem(0); n++) {		
+	Bird* b;
+	for (int n = 0; n < m_Birds .GetNumElem(0); n++) {
 
 		b = (Bird*) m_Birds.GetElem(0, n);
 
-		model.Identity();		
+		model.Identity();
 		//model.Scale (10,10,10);
 		model = b->orient.getMatrix();
-		model.PostTranslate( b->pos );			// translation		
+		model.PostTranslate( b->pos );			// translation
 
-		selfSetModelMtx ( model );		
+		selfSetModelMtx ( model );
 
-		// Draw elements			
+		// Draw elements
 		glDrawElements(GL_TRIANGLES, m_obj[i].vert_cnt, GL_UNSIGNED_INT, (void*) 0);
 	}
 }
@@ -2847,14 +2934,14 @@ void Flock2::RenderBirdsWithDart ()
 	Vec3F x,y,z, p,q,r,t;
 	Vec4F clr;
 	Bird* b;
-	float bird_size = 0.10f; //0.05f;	
+	float bird_size = 0.10f; //0.05f;
 
 	for (int n = 0; n < m_Birds.GetNumElem(0); n++) {
 
 		// bird color
 		b = (Bird*)m_Birds.GetElem(0, n);
-		clr = Vec4F(0, 0, 0, 1);							// default. black on sky/white.			
-		if (m_visualize == 1) {									// infovis coloring..				
+		clr = Vec4F(0, 0, 0, 1);							// default. black on sky/white.
+		if (m_visualize == 1) {									// infovis coloring..
 			if (b->clr.w == 0) {
 				float a = fmin(b->ang_accel.Length() / 24, 1);
 				clr = Vec4F(0, a, 0, 1);			// untagged, use green = angular accel
@@ -2872,7 +2959,7 @@ void Flock2::RenderBirdsWithDart ()
 			// dart
 			x = Vec3F(1, 0, 0) * b->orient;
 			y = Vec3F(0, 1, 0) * b->orient;
-			z = Vec3F(0, 0, 1) * b->orient;			
+			z = Vec3F(0, 0, 1) * b->orient;
 			p = b->pos - z * 0.3f;   // wingspan = 40 cm = 0.2m (per wing)
 			q = b->pos + z * 0.3f;
 			r = b->pos + x * 0.8f;   // length = 22 cm = 0.22m
@@ -2886,10 +2973,10 @@ void Flock2::RenderBirdsWithDart ()
 void Flock2::drawBackground ()
 {
 	int w = getWidth(), h = getHeight();
-	
+
 	switch (m_visualize) {
 	case 0:
-		// realistic		
+		// realistic
 		// drawGradient ( Vec2F(0,0), Vec2F(w,h), Vec4F(.1,.1,.4,1), Vec4F(.1,.1,.4,1), Vec4F(0.5,0.4,.6,1), Vec4F(0.5,0.4,.6,1) );
 		drawGradient ( Vec2F(0,0), Vec2F(w,h), Vec4F(.6,.7,.8,1), Vec4F(.6,.6,.8,1), Vec4F(1,1,.9,1), Vec4F(1,1,.9,1) );
 		break;
@@ -2898,14 +2985,14 @@ void Flock2::drawBackground ()
 		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(.4, .4, .4, 1));
 		break;
 	case 2:
-		// black & white 
-		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(1, 1, 1, 1));		
-		break;		
+		// black & white
+		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(1, 1, 1, 1));
+		break;
 	};
 }
 
 void Flock2::display ()
-{	
+{
 	Vec3F x,y,z;
 	Vec3F pnt;
 	Vec4F clr;
@@ -2918,11 +3005,11 @@ void Flock2::display ()
 	glLineWidth ( 2 );
 
 	// Advance simulation
-	if (m_running) { 		
+	if (m_running) {
 
 		for (int i=0; i < m_Params.steps; i++)
 			Run ();
-	}	
+	}
 
 	// CameraToCentroid ();
 
@@ -2939,7 +3026,7 @@ void Flock2::display ()
 	//
 	start2D(w, h);					// this 2D draw goes behind (before) the 3D stuff
 		drawBackground ();
-	end2D(); 
+	end2D();
 
 	//----------- 3D Render (sketch mode)
 	//
@@ -2947,7 +3034,7 @@ void Flock2::display ()
 
 		start3D(m_cam);			// draws all 3D stuff
 
-			setLight3D ( Vec3F(0, 200, 0), Vec4F(1, 1, 1, 1) );	
+			setLight3D ( Vec3F(0, 200, 0), Vec4F(1, 1, 1, 1) );
 			setMaterial ( Vec3F(0,0,0), Vec3F(1,1,1), Vec3F(0,0,0), 40, 1.0 );
 			// setEnvmap3D(&m_env_map);
 
@@ -2956,33 +3043,33 @@ void Flock2::display ()
 				drawGrid( Vec4F(0.4,0.4,0.4,1) );
 			}
 
-			// Draw selected bird 
+			// Draw selected bird
 			if (m_bird_sel != -1) {
-			
-				// draw visualization elements 
+
+				// draw visualization elements
 				// this includes:
 				// - selected bird (green)
 				// - neighobr birds (yellow)
 				// - nearest bird (red)
 				Vec3F cn, p;
-				for (int k=0; k < m_vis.size(); k++) {				
+				for (int k=0; k < m_vis.size(); k++) {
 					drawCircle3D ( m_vis[k].pos, m_cam->getPos(), m_vis[k].radius, m_vis[k].clr );
-				}			
-			}	
+				}
+			}
 
 			// Draw acceleration grid
 			if (m_draw_grid) {
 				drawBox3D ( m_Accel.bound_min, m_Accel.bound_max, Vec4F(0,1,1,0.5) );
 				DrawAccelGrid ();
-			}		
+			}
 
 			// Draw centroid
 			if (m_visualize == 1 ) {
 				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
 			}
-	
+
 			RenderBirdsWithDart ();
-		
+
 			// ***** Draw predator with circle around it, static
 			float predator_size = 0.1f;
 			Vec4F pclr (1,0,0,1);
@@ -2991,34 +3078,34 @@ void Flock2::display ()
 
 				//printf("Predator is at: %f, %f, %f \n", p->pos.x, p->pos.y, p->pos.z);
 
-				//pclr = (p->currentState == ATTACK) ? Vec4F(1, 0, 0, 1) : Vec4F(0, 0, 1, 1);				
+				//pclr = (p->currentState == ATTACK) ? Vec4F(1, 0, 0, 1) : Vec4F(0, 0, 1, 1);
 
 				drawLine3D (p->pos, p->pos + (p->vel * predator_size), pclr);
 				drawCircle3D (p->pos, p->pos + (p->vel * predator_size), 0.5, pclr);
 			}
-		end3D(); 
+		end3D();
 	}
 
 	//----------- 2D Overlay (sketch mode)
 	//
-	Vec4F tc (1,1,1,1);	
+	Vec4F tc (1,1,1,1);
 	float xscal, yscal;
 
 	start2D ( w, h );			// this 2D draw is overlayed on top
-		
-		clr = Vec4F(0,0,0,1);			
+
+		clr = Vec4F(0,0,0,1);
 
 		// Visualize selected bird
 		VisualizeSelectedBird ();
-		
+
 		// Visualize predators
 		VisualizePredators ();
 
-		setTextSz ( 16, 0 );	
+		setTextSz ( 16, 0 );
 
-		// Spectrum analysis 
+		// Spectrum analysis
 		if ( m_draw_plot ) {
-			
+
 			// FFT plot
 		  drawImg ( &m_plot[0], Vec2F(0,0), Vec2F(PLOT_RESX, PLOT_RESY), Vec4F(1,1,1,1) );
 
@@ -3027,14 +3114,14 @@ void Flock2::display ()
 				drawLine ( Vec2F(m_lines[k].x, m_lines[k].y), Vec2F(m_lines[k].z, m_lines[k].w), Vec4F(.8,0.8,0.8, 1.0) );
 			}
 
-			// FFT energy peaks			
+			// FFT energy peaks
 		  for (int k=0; k < m_vis.size(); k++) {
-				drawCircle ( m_vis[k].pos, m_vis[k].radius, m_vis[k].clr );				
+				drawCircle ( m_vis[k].pos, m_vis[k].radius, m_vis[k].clr );
 				drawText ( m_vis[k].pos + Vec3F(0,-16,0), m_vis[k].txt, m_vis[k].clr );
-			}			
-		}				
+			}
+		}
 
-		// Energy scatter plot		
+		// Energy scatter plot
 		/* xscal = m_Params.max_speed;
 		//yscal = (m_method==0) ? 1e-4 : 5e-2;
 	  yscal = 50;
@@ -3043,17 +3130,17 @@ void Flock2::display ()
 			drawLine ( Vec2F( (v/xscal)*1000, 600-10), Vec2F( (v/xscal)*1000, 600), clr );		// x-axis ticks
 		}
 		for (int n=0; n < m_Birds.GetNumElem(0); n++) {
-			b = (Bird*) m_Birds.GetElem(0, n);			
+			b = (Bird*) m_Birds.GetElem(0, n);
 			//drawCircle ( Vec2F( (b->speed/xscal)*1000, 600 - (b->Pturn / yscal)*200 ), 1.0, clr);
 			drawCircle ( Vec2F( (b->speed/xscal)*1000, 600 - (b->Ptotal / yscal)*200 ), 1.0, clr);
 		}  */
 
-		// Graph 
+		// Graph
 		if ( m_graph.size() > 0 ) {
-			Vec2F a,b;			
+			Vec2F a,b;
 			// f = t / dt, x = f / 20 = t/(dt*20)
 			float tmax = 40.0;									// graph max (seconds)
-			
+
 			for (int k=0; k < m_graph.size(); k++) {
 
 				xscal = m_graph[k].scal.x;
@@ -3063,9 +3150,9 @@ void Flock2::display ()
 				for (float v = 0; v < tmax; v++) {		// secs
 					drawLine ( Vec2F(v*xscal, 1200-10), Vec2F(0+v*xscal, 1200), clr );
 				}
-				for (float v = 0; v < yscal; v+= yscal/10.0f) {		
+				for (float v = 0; v < yscal; v+= yscal/10.0f) {
 					drawLine ( Vec2F(0, 1200-(v/yscal)*400), Vec2F(0+tmax*xscal, 1200-(v/yscal)*400), Vec4F(0,0,0, 0.5) );
-				}			
+				}
 				// plot
 				b = Vec3F( 0, 1200 - (m_graph[k].y[0] / yscal)*400, 0);
 				//printf ( "%f\n", m_graph[k].y[100] );
@@ -3074,19 +3161,19 @@ void Flock2::display ()
 					drawLine ( a, b, m_graph[k].clr );
 					b = a;
 				}
-			}		
+			}
 		}
 		// Current time
-		/* sprintf ( msg, "t = %4.3f sec", m_time );	
+		/* sprintf ( msg, "t = %4.3f sec", m_time );
 		setTextSz ( 24, 0 );						// set text height
 		drawText ( Vec2F(getWidth()-600, 10), msg, tc );	*/
-	end2D(); 
+	end2D();
 
 	// Render all items from sketch mode (actual OpenGL render)
-	drawAll ();				
+	drawAll ();
 
 	// Render birds as meshes (direct mode, OpenGL)
-	if (m_draw_mesh > 0) {		
+	if (m_draw_mesh > 0) {
 		selfStartDraw3D(m_cam);
 		selfSetLight3D(Vec3F(0, 100, 200), Vec4F(1.5, 1.5, .6, 1));
 		selfSetTexture();
@@ -3096,7 +3183,7 @@ void Flock2::display ()
 
 		selfEndDraw3D();
 	}
-	
+
 	appPostRedisplay();		// Post redisplay since simulation is continuous
 }
 
@@ -3113,46 +3200,46 @@ void Flock2::mouse(AppEnum button, AppEnum state, int mods, int x, int y)
 }
 
 
-void Flock2::motion (AppEnum button, int x, int y, int dx, int dy) 
+void Flock2::motion (AppEnum button, int x, int y, int dx, int dy)
 {
 	// Get camera for scene
 	bool shift = (getMods() & KMOD_SHIFT);		// Shift-key to modify light
 	float fine = 0.5f;
-	Vec3F dang; 
+	Vec3F dang;
 
 	m_cam_adjust = false;
 
-	switch ( mouse_down ) {	
-	case AppEnum::BUTTON_LEFT:  {	
-	
+	switch ( mouse_down ) {
+	case AppEnum::BUTTON_LEFT:  {
+
 		} break;
 
 	case AppEnum::BUTTON_MIDDLE: {
-		// Adjust target pos				
+		// Adjust target pos
 		float zoom = (m_cam->getOrbitDist() - m_cam->getDolly()) * 0.0003f;
-		m_cam->moveRelative ( float(dx) * zoom, float(-dy) * zoom, 0 );	
+		m_cam->moveRelative ( float(dx) * zoom, float(-dy) * zoom, 0 );
 		m_cam_adjust = true;
-		} break; 
+		} break;
 
 	case AppEnum::BUTTON_RIGHT: {
 		// Adjust orbit angles
 		Vec3F angs = m_cam->getAng();
 
-		//if (m_draw_vis) { 			
+		//if (m_draw_vis) {
 
 			angs.x += dx*0.2f;
-			angs.y -= dy*0.2f;				
-			m_cam->SetOrbit ( angs, m_cam->getToPos(), m_cam->getOrbitDist(), m_cam->getDolly() );			
+			angs.y -= dy*0.2f;
+			m_cam->SetOrbit ( angs, m_cam->getToPos(), m_cam->getOrbitDist(), m_cam->getDolly() );
 
-		/*} else {		
+		/*} else {
 			angs.x += dx*0.02f;
-			angs.y -= dy*0.02f;				
-			m_cam->setAngles ( angs.x, angs.y, angs.z );		
+			angs.y -= dy*0.02f;
+			m_cam->setAngles ( angs.x, angs.y, angs.z );
 		} */
 
 		m_cam_adjust = true;
-	} break;	 
-	
+	} break;
+
 	};
 }
 
@@ -3164,49 +3251,49 @@ void Flock2::mousewheel(int delta)
 	float dolly = m_cam->getDolly();
 	float zoom = (dist - dolly) * 0.0005f;
 	dist -= delta * zoom * zoomamt;
-	
-	m_cam->SetOrbit(m_cam->getAng(), m_cam->getToPos(), dist, dolly);		
+
+	m_cam->SetOrbit(m_cam->getAng(), m_cam->getToPos(), dist, dolly);
 	m_cam_adjust = true;
 }
- 
+
 
 
 
 void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 {
-	if (action == AppEnum::BUTTON_RELEASE) 
+	if (action == AppEnum::BUTTON_RELEASE)
 		return;
 
 	switch ( keycode ) {
 	case 'a':
 		m_analysis = 1-m_analysis;
 		break;
-	case 'm': 
+	case 'm':
 		m_method = 1-m_method;
 		m_Params.min_speed = (m_method==0) ? 5 : 10;
 		Reset ( m_Params.num_birds, m_Params.num_predators);
 		break;
-	case 'v': 
+	case 'v':
 		if (++m_visualize > 2 ) m_visualize = 0;
 		break;
-	case 's': 
+	case 's':
 		if (++m_draw_mesh > 2 ) m_draw_mesh = 0;
 		break;
 	case 'g': m_draw_grid = !m_draw_grid; break;
 	case 'p': m_draw_plot = !m_draw_plot; break;
-  case 'c': 		
-		m_cockpit_view = !m_cockpit_view; 
-		//m_cam_orient = 
+  case 'c':
+		m_cockpit_view = !m_cockpit_view;
+		//m_cam_orient =
 		break;
 	case 'r': Reset( m_Params.num_birds, m_Params.num_predators); break;
-	case ' ':	m_running = !m_running;	break;	
-	case 'z': 
-		m_bird_sel--; 
-		if (m_bird_sel < 0) m_bird_sel = 0; 
+	case ' ':	m_running = !m_running;	break;
+	case 'z':
+		m_bird_sel--;
+		if (m_bird_sel < 0) m_bird_sel = 0;
 		break;
 	case 'x':
-		m_bird_sel++; 
-		if (m_bird_sel > m_Birds.GetNumElem(0)) m_bird_sel = m_Birds.GetNumElem(0)-1;		
+		m_bird_sel++;
+		if (m_bird_sel > m_Birds.GetNumElem(0)) m_bird_sel = m_Birds.GetNumElem(0)-1;
 		break;
 	};
 	// printf ( "%d \n", m_bird_sel );
@@ -3218,18 +3305,18 @@ void Flock2::reshape (int w, int h)
 	setview2D ( w, h );
 
 	m_cam->setAspect(float(w) / float(h));
-	m_cam->SetOrbit(m_cam->getAng(), m_cam->getToPos(), m_cam->getOrbitDist(), m_cam->getDolly());	
-		
-	appPostRedisplay();	
+	m_cam->SetOrbit(m_cam->getAng(), m_cam->getToPos(), m_cam->getOrbitDist(), m_cam->getDolly());
+
+	appPostRedisplay();
 }
 
 void Flock2::startup ()
 {
 	addSearchPath (ASSET_PATH);
 
-        // Default config
- 	m_gpu = 1;	
-	m_method = 0;			// 0 = Flock2, 1 = Reynolds	 
+		// Default config
+ 	m_gpu = 1;
+	m_method = 0;			// 0 = Flock2, 1 = Reynolds
 	m_analysis = 0;			// 0 = off, 1 = analyze freq & energy
 	m_visualize = 1;		// 0 = realistic, 1 = infovis, 2 = black&white
 	m_viewgrid = 0;
@@ -3240,7 +3327,7 @@ void Flock2::startup ()
 	DefaultParams();
 
 	int w = 1920, h = 1080;
-	appStart ( "Flock2 (c) 2024 Hoetzlein", "Flock2", w, h, 4, 2, 16, false );	
+	appStart ( "Flock2 (c) 2024 Hoetzlein", "Flock2", w, h, 4, 2, 16, false );
 
 	// on_arg is called before init() to load scene and config parameters
 }
@@ -3248,11 +3335,9 @@ void Flock2::startup ()
 void Flock2::shutdown()
 {
   #ifdef USE_FFTW
-	// destroy FFTW buffers	
+	// destroy FFTW buffers
 	fftw_destroy_plan( m_fftw_plan);
 	fftw_free ( m_fftw_out );
 	free ( m_fftw_in );
   #endif
 }
-
-
