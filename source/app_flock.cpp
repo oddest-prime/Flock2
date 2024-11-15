@@ -185,6 +185,7 @@ public:
 	int									max_cluster_id;		// clustering birds: maximum id
 	std::vector<std::vector<int>>		cluster_assignment;
 	std::vector<int>					cluster_order;
+	std::vector<Histogram>				cluster_histogram;
 
 	// Sim setup
 	float			m_time;
@@ -359,15 +360,25 @@ Predator* Flock2::AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power)
 	//printf("Predator is added at: %f, %f, %f \n", p.pos.x, p.pos.y, p.pos.z);
 
 	return (Predator*)m_Predators.GetElem(FPREDATOR, ndx);
-} // ****
+}
 
 int iDivUp (int a, int b) {
 	return (a % b != 0) ? (a / b + 1) : (a / b);
 }
+
 void ComputeNumBlocks (int numPnts, int minThreads, int &numBlocks, int &numThreads)
 {
 	numThreads = std::min( minThreads, numPnts );
 	numBlocks = (numThreads==0) ? 1 : iDivUp ( numPnts, numThreads );
+}
+
+float fmod180(float a)
+{
+	if(a > 180)
+		return fmod(a, 360) - 360;
+	if(a < -180)
+		return fmod(a, 360) + 360;
+	return a;
 }
 
 void Flock2::DefaultParams ()
@@ -431,12 +442,15 @@ void Flock2::DefaultParams ()
 	m_Params.pred_radius = 10.0;				// detection radius of predator for birds
 	m_Params.pred_mass = 0.8;
 	m_Params.max_predspeed = 22;				// m/s
-	m_Params.min_predspeed = 18.8;				// m/s
-	m_Params.pred_attack_amt = 0.01f;			// attacking amount
+	m_Params.min_predspeed = 15;				// m/s
+	m_Params.pred_attack_amt = 0.1f;			// attacking amount
 	//m_Params.pred_flee_speed = m_Params.max_speed;	// bird speed to get away from predator
 	m_Params.avoid_pred_angular_amt = 0.04f;			// bird angular avoidance amount w.r.t. predator
 	m_Params.avoid_pred_power_amt = 0.04f;				// power avoidance amount (N) w.r.t. predator
 	m_Params.avoid_pred_power_ctr = 3;					// power avoidance center (N) w.r.t. predator
+
+	m_Params.cluster_threshold_dist = 5.0;				// cluster threshold in meters
+	m_Params.cluster_minsize_color = 0.03;				// minimum cluster size to color it (range 0 - 1, relative to num_birds)
 
 	m_Params.fov_pred = 120; // degrees
 	m_Params.fovcos_pred = cos(m_Params.fov_pred * DEGtoRAD);
@@ -602,7 +616,7 @@ void Flock2::Reset (int num, int num_pred )
 	// Initialized bird memory
 	//
 	int numPoints = m_Params.num_birds;
-	int numPoints_pred = m_Params.num_predators; // ****
+	int numPoints_pred = m_Params.num_predators;
 	uchar usage = (m_gpu) ? (DT_CPU | DT_CUMEM) : DT_CPU;
 
 	m_Birds.DeleteAllBuffers ();
@@ -646,7 +660,7 @@ void Flock2::Reset (int num, int num_pred )
 
 	}
 
-	// **** add predators
+	// add predators
 
 	for (int n = 0; n < numPoints_pred; n++) {
 		// randomly distribute predators
@@ -835,7 +849,7 @@ void Flock2::InitializeGrid ()
 void Flock2::InsertIntoGrid ()
 {
 	int numPoints = m_Params.num_birds;
-	int numPoints_pred = m_Params.num_predators; 		// *****
+	int numPoints_pred = m_Params.num_predators;
 
 
 	if (m_gpu) {
@@ -1108,9 +1122,7 @@ void Flock2::FindNeighbors ()
 							dist = posi - posj;
 							dsq = (dist.x*dist.x + dist.y*dist.y + dist.z*dist.z);
 
-							if ( dsq < rd2 ) {
-								// neighbor is within radius..
-
+							if ( dsq < m_Params.cluster_threshold_dist*m_Params.cluster_threshold_dist ) { // bird is closer than cluster threshold
 								if(bj->cluster_id == -1) { // no cluster assigned yet for neighbor bird
 									bj->cluster_id = bi->cluster_id; // put both birds in same cluster
 									cluster_assignment.at(bi->cluster_id).push_back(j);
@@ -1129,6 +1141,10 @@ void Flock2::FindNeighbors ()
 									}
 									cluster_assignment.at(merge_from_id).clear();
 								}
+							}
+
+							if ( dsq < rd2 ) {
+								// neighbor is within radius..
 
 								// confirm bird is within forward field-of-view
 								dirj = posj - posi; dirj.Normalize();
@@ -1187,6 +1203,7 @@ void Flock2::CalculateClusters ()
 {
 	//printf("max_cluster_id = %d \n", max_cluster_id);
 
+/*
 	if (m_gpu) {
 		printf("CalculateClusters: Cuda version not implemented yet!\n");
 	} else {
@@ -1199,8 +1216,10 @@ void Flock2::CalculateClusters ()
 //			printf("bird %d, cluster %d \n", i, bi->cluster_id);
 		}
 	}
+*/
 
-	std::vector<Histogram> cluster_histogram(cluster_assignment.size());
+	cluster_histogram.clear();
+	cluster_histogram.resize(cluster_assignment.size());
 
 	for(unsigned int i = 0; i < cluster_assignment.size(); i++) {
 		/*printf("cluster %d: ", i);
@@ -1780,8 +1799,6 @@ void Flock2::OutputPointCloudFiles ( int frame )
 
 }
 
-
-
 void Flock2::AdvanceOrientationHoetzlein ()
 {
 	if (m_gpu) {
@@ -2180,7 +2197,7 @@ void Flock2::Advance_pred()
 				p->target.z -= yaw * m_Params.avoid_pred_angular_amt;
 				p->target.y -= pitch * m_Params.avoid_pred_angular_amt;
 
-				if (dist > 25.0f) {
+				if (dist > 40.0f) {
 					new_state = ATTACK;				// predator far from flock, switch to attack
 					//printf("Distance reached, %f.\n", p->pos.y);
 				}
@@ -2198,7 +2215,7 @@ void Flock2::Advance_pred()
 				p->target.z += yaw * m_Params.pred_attack_amt;
 				p->target.y += pitch * m_Params.pred_attack_amt;
 
-				printf("yaw: %f, pitch: %f\n", yaw, pitch);
+				//printf("yaw: %f, pitch: %f\n", yaw, pitch);
 
 				if (dist < 3.0f) {
 					new_state = HOVER;			// predator close to centroid, switch to hover
@@ -2262,8 +2279,10 @@ void Flock2::Advance_pred()
 		p->orient.toEuler(angs);
 
 		// Target corrections
-		angs.z = fmod(angs.z, 180.0);
-		p->target.z = fmod(p->target.z, 180);								// yaw -180/180
+		//angs.z = fmod(angs.z, 180.0);
+		angs.z = fmod180(angs.z);
+		//p->target.z = fmod(p->target.z, 180);								// yaw -180/180
+		p->target.z = fmod180(p->target.z);								// yaw -180/180
 		p->target.x = circleDelta(p->target.z, angs.z) * 0.5;				// banking
 		p->target.y *= m_Params.pitch_decay;								// level out
 		if (p->target.y < m_Params.pitch_min) p->target.y = m_Params.pitch_min;
@@ -3023,7 +3042,9 @@ void Flock2::RenderBirdsWithDart ()
 		}
 		if (m_visualize == VISUALIZE_CLUSTERS) {	// cluster coloring..
 			int order_n = cluster_order.at(b->cluster_id);
-			if(order_n < 10)
+			int bird_cnt = cluster_histogram.at(order_n).bird_cnt;
+			//if(order_n < 10)
+			if(bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
 				clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
 			else
 				clr = Vec4F(0.9, 0.9, 0.9, 1);
@@ -3158,6 +3179,8 @@ void Flock2::display ()
 				char text_x[] = "x"; drawText3D ( Vec3F(origin_sz,0,0), 3.0, text_x, Vec4F(1,1,1,0.5) );
 				char text_y[] = "y"; drawText3D ( Vec3F(0,origin_sz,0), 3.0, text_y, Vec4F(1,1,1,0.5) );
 				char text_z[] = "z"; drawText3D ( Vec3F(0,0,origin_sz), 3.0, text_z, Vec4F(1,1,1,0.5) );
+
+				drawFace3D( Vec3F(m_Accel.bound_min.x, 0, m_Accel.bound_min.z), Vec3F(m_Accel.bound_min.x, 0, m_Accel.bound_max.z), Vec3F(m_Accel.bound_max.x, 0, m_Accel.bound_max.z), Vec3F(m_Accel.bound_max.x, 0, m_Accel.bound_min.z), Vec3F(0, 1, 0), Vec4F(0.5,0.5,0.5,0.3) );
 			}
 
 			// Draw centroid
@@ -3168,7 +3191,7 @@ void Flock2::display ()
 
 			RenderBirdsWithDart ();
 
-			// ***** Draw predator with circle around it, static
+			// Draw predator with circle around it
 			float predator_size = 0.5f;
 			Vec4F pclr (1,0,0,1);
 			for (int n = 0; n < m_Predators.GetNumElem(FPREDATOR); n++) {

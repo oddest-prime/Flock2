@@ -189,6 +189,9 @@
 		float		pred_attack_amt;
 		float		pred_mass;
 
+		float		cluster_threshold_dist;
+		float		cluster_minsize_color;
+
 		float		reynolds_avoidance;
 		float		reynolds_cohesion;
 		float		reynolds_alignment;
