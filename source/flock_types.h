@@ -8,12 +8,12 @@
 	#define VISUALIZE_CLUSTERS			3
 
 	// Particle data
-	#define FBIRD		0
-	#define FGCELL		1
-	#define FGNDX		2
-	#define FPREDATOR		3	// ***
-	#define FGCELL_pred     4	// ***
-	#define FGNDX_pred      6	// ***
+	#define FBIRD			0
+	#define FGCELL			1
+	#define FGNDX			2
+	#define FPREDATOR		3
+	#define FGCELL_pred     4
+	#define FGNDX_pred      6
 
 	#define MAX_FLOCKS		50
 
@@ -28,17 +28,17 @@
 	#define AGRID_pred      9
 	#define AGRIDCNT_pred	10
 
-	#define GRID_UNDEF				2147483647			// max int
-	#define SCAN_BLOCKSIZE		512
+	#define GRID_UNDEF							2147483647			// max int
+	#define SCAN_BLOCKSIZE						512
 
 	// GPU Kernels
 	#define KERNEL_INSERT						0
-	#define	KERNEL_COUNTING_SORT		1
-	#define KERNEL_FIND_NBRS				2
-	#define KERNEL_ADVANCE_ORIENT		3
-	#define KERNEL_ADVANCE_VECTORS	4
-	#define KERNEL_FPREFIXSUM				5
-	#define KERNEL_FPREFIXFIXUP			6
+	#define	KERNEL_COUNTING_SORT				1
+	#define KERNEL_FIND_NBRS					2
+	#define KERNEL_ADVANCE_ORIENT				3
+	#define KERNEL_ADVANCE_VECTORS				4
+	#define KERNEL_FPREFIXSUM					5
+	#define KERNEL_FPREFIXFIXUP					6
 	#define KERNEL_MAX							7
 
 	#ifdef CUDA_KERNEL
@@ -108,7 +108,7 @@
 		FOLLOW		// state3
 	};
 
-	struct ALIGN(16) Predator {	// **** struct for predator
+	struct ALIGN(16) Predator {
 
 		q4			orient;
 		f4			clr;
@@ -145,7 +145,7 @@
 
 		int			steps;
 		int			num_birds;
-		int			num_predators; 		// ****
+		int			num_predators;
 		int			neighbors;
 		float		DT;
 		float		mass;
@@ -180,8 +180,8 @@
 
 		float 		fov_pred, fovcos_pred;
 
-		float 		pred_radius;					//----------
-		float 		pred_flee_speed;			//----------
+		float 		pred_radius;
+		float 		pred_flee_speed;
 		float 		avoid_pred_angular_amt;
 		float 		avoid_pred_power_amt;
 		float 		avoid_pred_power_ctr;

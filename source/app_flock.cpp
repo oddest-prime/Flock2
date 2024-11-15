@@ -217,6 +217,7 @@ public:
 	bool			m_cockpit_view;
 	int				m_draw_mesh;
 	bool			m_draw_grid;
+	bool			m_draw_origin;
 	bool			m_draw_plot;
 	bool			m_kernels_loaded;
 	int				bird_index;
@@ -268,11 +269,11 @@ public:
 
 		CUcontext		m_ctx;
 		CUdevice		m_dev;
-		CUdeviceptr	m_cuAccel;
-		CUdeviceptr	m_cuParam;
-		CUdeviceptr	m_cuFlock;
+		CUdeviceptr		m_cuAccel;
+		CUdeviceptr		m_cuParam;
+		CUdeviceptr		m_cuFlock;
 		CUmodule		m_Module;
-		CUfunction	m_Kernel[ KERNEL_MAX ];
+		CUfunction		m_Kernel[ KERNEL_MAX ];
 	#endif
 };
 
@@ -297,13 +298,13 @@ Flock2 obj;
 		cuCheck ( cuModuleLoad ( &m_Module, filepath.c_str() ), "LoadKernel", "cuModuleLoad", "flock_kernels.ptx", DEBUG_CUDA );
 
 		LoadKernel ( KERNEL_INSERT,					"insertParticles" );
-		LoadKernel ( KERNEL_COUNTING_SORT,	"countingSortFull" );
-		LoadKernel ( KERNEL_FIND_NBRS,			"findNeighborsTopological" );
+		LoadKernel ( KERNEL_COUNTING_SORT,			"countingSortFull" );
+		LoadKernel ( KERNEL_FIND_NBRS,				"findNeighborsTopological" );
 		//LoadKernel ( KERNEL_FIND_NBRS,			"findNeighbors" );
-		LoadKernel ( KERNEL_ADVANCE_ORIENT,	"advanceOrientationHoetzlein" );
-		LoadKernel ( KERNEL_ADVANCE_VECTORS,"advanceVectorsReynolds" );
-		LoadKernel ( KERNEL_FPREFIXSUM,			"prefixSum" );
-		LoadKernel ( KERNEL_FPREFIXFIXUP,		"prefixFixup" );
+		LoadKernel ( KERNEL_ADVANCE_ORIENT,			"advanceOrientationHoetzlein" );
+		LoadKernel ( KERNEL_ADVANCE_VECTORS,		"advanceVectorsReynolds" );
+		LoadKernel ( KERNEL_FPREFIXSUM,				"prefixSum" );
+		LoadKernel ( KERNEL_FPREFIXFIXUP,			"prefixFixup" );
 	}
 #endif
 
@@ -332,7 +333,7 @@ Bird* Flock2::AddBird ( Vec3F pos, Vec3F vel, Vec3F target, float power )
 	return (Bird*) m_Birds.GetElem( FBIRD, ndx);
 }
 
-Predator* Flock2::AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power)	// **** copy of "AddBird"
+Predator* Flock2::AddPredator(Vec3F pos, Vec3F vel, Vec3F target, float power)
 {
 	Vec3F dir, angs;
 
@@ -430,7 +431,7 @@ void Flock2::DefaultParams ()
 	m_Params.pred_radius = 10.0;				// detection radius of predator for birds
 	m_Params.pred_mass = 0.8;
 	m_Params.max_predspeed = 22;				// m/s
-	m_Params.min_predspeed = 8.8;				// m/s
+	m_Params.min_predspeed = 18.8;				// m/s
 	m_Params.pred_attack_amt = 0.01f;			// attacking amount
 	//m_Params.pred_flee_speed = m_Params.max_speed;	// bird speed to get away from predator
 	m_Params.avoid_pred_angular_amt = 0.04f;			// bird angular avoidance amount w.r.t. predator
@@ -663,8 +664,8 @@ void Flock2::Reset (int num, int num_pred )
 
 	// Initialize accel grid
 	//
-	m_Accel.bound_min = Vec3F(-200, -100, -100);
-	m_Accel.bound_max = Vec3F( 200,  100,  100);
+	m_Accel.bound_min = Vec3F(-200,   0, -200);
+	m_Accel.bound_max = Vec3F( 200,  200,  200);
 
 	//m_Accel.bound_min = Vec3F(-200,   0, -100);
 	//m_Accel.bound_max = Vec3F( 200, 150,  100);
@@ -802,7 +803,7 @@ void Flock2::InitializeGrid ()
 	int numElem3 = int ( numElem2 / blockSize ) + 1;
 
 	int numPoints = m_Params.num_birds;
-	int numPoints_pred = m_Params.num_predators; 		// ******
+	int numPoints_pred = m_Params.num_predators;
 
 	int mem_usage = (m_gpu) ? DT_CPU | DT_CUMEM : DT_CPU;
 
@@ -2197,6 +2198,8 @@ void Flock2::Advance_pred()
 				p->target.z += yaw * m_Params.pred_attack_amt;
 				p->target.y += pitch * m_Params.pred_attack_amt;
 
+				printf("yaw: %f, pitch: %f\n", yaw, pitch);
+
 				if (dist < 3.0f) {
 					new_state = HOVER;			// predator close to centroid, switch to hover
 					//printf("Centroid reached.\n");
@@ -2241,7 +2244,7 @@ void Flock2::Advance_pred()
 		// Body orientation
 		fwd = Vec3F(1, 0, 0) * p->orient;			// X-axis is body forward
 		up = Vec3F(0, 1, 0) * p->orient;			// Y-axis is body up
-		right = Vec3F(0, 0, 1) * p->orient;		// Z-axis is body right
+		right = Vec3F(0, 0, 1) * p->orient;			// Z-axis is body right
 
 		// Direction of motion
 		p->speed = p->vel.Length();
@@ -2260,9 +2263,9 @@ void Flock2::Advance_pred()
 
 		// Target corrections
 		angs.z = fmod(angs.z, 180.0);
-		p->target.z = fmod(p->target.z, 180);										// yaw -180/180
+		p->target.z = fmod(p->target.z, 180);								// yaw -180/180
 		p->target.x = circleDelta(p->target.z, angs.z) * 0.5;				// banking
-		p->target.y *= m_Params.pitch_decay;																				// level out
+		p->target.y *= m_Params.pitch_decay;								// level out
 		if (p->target.y < m_Params.pitch_min) p->target.y = m_Params.pitch_min;
 		if (p->target.y > m_Params.pitch_max) p->target.y = m_Params.pitch_max;
 		if (fabs(p->target.y) < 0.0001) p->target.y = 0;
@@ -2449,11 +2452,13 @@ void Flock2::VisualizePredators ()
 		drawText ( Vec2F(10, 30 + 40 + 20*n), msg, tc );
 		sprintf ( msg, "target: x= %4.1f  y= %4.1f  z= %4.1f ", p->target.x, p->target.y, p->target.z );
 		drawText ( Vec2F(10, 30 + 60 + 20*n), msg, tc );
+		sprintf ( msg, "speed: %4.1f ", p->speed );
+		drawText ( Vec2F(10, 30 + 80 + 20*n), msg, tc );
 
 		auto dirj = m_Flock.centroid - p->pos;
 		float dist = dirj.Length();
 		sprintf ( msg, "distance: %4.1f ", dist );
-		drawText ( Vec2F(10, 30 + 80 + 20*n), msg, tc );
+		drawText ( Vec2F(10, 30 + 100 + 20*n), msg, tc );
 
 
 	}
@@ -2708,6 +2713,7 @@ bool Flock2::init ()
 	m_cockpit_view = false;
 	m_draw_mesh = 0;
 	m_draw_grid = false;
+	m_draw_origin = false;
 	m_cam_mode = 0;
 
 	m_rec_start = 1000;
@@ -3139,6 +3145,21 @@ void Flock2::display ()
 				DrawAccelGrid ();
 			}
 
+			// Draw origin and axes
+			if (m_draw_origin) {
+				drawBox3D ( m_Accel.bound_min, m_Accel.bound_max, Vec4F(0,1,1,0.5) );
+
+				float origin_sz = 20.0;
+				drawLine3D ( Vec3F(0,0,0), Vec3F(origin_sz,0,0), Vec4F(1,0,0,0.5) );
+				drawLine3D ( Vec3F(0,0,0), Vec3F(0,origin_sz,0), Vec4F(0,1,0,0.5) );
+				drawLine3D ( Vec3F(0,0,0), Vec3F(0,0,origin_sz), Vec4F(0,0,1,0.5) );
+
+				char text_0[] = "0"; drawText3D ( Vec3F(0,0,0), 3.0, text_0, Vec4F(1,1,1,0.5) );
+				char text_x[] = "x"; drawText3D ( Vec3F(origin_sz,0,0), 3.0, text_x, Vec4F(1,1,1,0.5) );
+				char text_y[] = "y"; drawText3D ( Vec3F(0,origin_sz,0), 3.0, text_y, Vec4F(1,1,1,0.5) );
+				char text_z[] = "z"; drawText3D ( Vec3F(0,0,origin_sz), 3.0, text_z, Vec4F(1,1,1,0.5) );
+			}
+
 			// Draw centroid
 			if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
@@ -3361,6 +3382,7 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 		if (++m_draw_mesh > 2 ) m_draw_mesh = 0;
 		break;
 	case 'g': m_draw_grid = !m_draw_grid; break;
+	case 'o': m_draw_origin = !m_draw_origin; break;
 	case 'p': m_draw_plot = !m_draw_plot; break;
   case 'c':
 		m_cockpit_view = !m_cockpit_view;
