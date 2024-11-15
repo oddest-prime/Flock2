@@ -442,15 +442,15 @@ void Flock2::DefaultParams ()
 	m_Params.pred_radius = 10.0;				// detection radius of predator for birds
 	m_Params.pred_mass = 0.8;
 	m_Params.max_predspeed = 22;				// m/s
-	m_Params.min_predspeed = 15;				// m/s
+	m_Params.min_predspeed = 18;				// m/s
 	m_Params.pred_attack_amt = 0.1f;			// attacking amount
 	//m_Params.pred_flee_speed = m_Params.max_speed;	// bird speed to get away from predator
-	m_Params.avoid_pred_angular_amt = 0.04f;			// bird angular avoidance amount w.r.t. predator
-	m_Params.avoid_pred_power_amt = 0.04f;				// power avoidance amount (N) w.r.t. predator
+	m_Params.avoid_pred_angular_amt = 0.08f;			// bird angular avoidance amount w.r.t. predator
+	m_Params.avoid_pred_power_amt = 0.08f;				// power avoidance amount (N) w.r.t. predator
 	m_Params.avoid_pred_power_ctr = 3;					// power avoidance center (N) w.r.t. predator
 
-	m_Params.cluster_threshold_dist = 5.0;				// cluster threshold in meters
-	m_Params.cluster_minsize_color = 0.03;				// minimum cluster size to color it (range 0 - 1, relative to num_birds)
+	m_Params.cluster_threshold_dist = 3.0;				// cluster threshold in meters
+	m_Params.cluster_minsize_color = 0.02;				// minimum cluster size to color it (range 0 - 1, relative to num_birds)
 
 	m_Params.fov_pred = 120; // degrees
 	m_Params.fovcos_pred = cos(m_Params.fov_pred * DEGtoRAD);
@@ -2194,10 +2194,10 @@ void Flock2::Advance_pred()
 				// dirj = (dirj / dist) * p->orient.inverse();
 				yaw = atan2(dirj.z, dirj.x) * RADtoDEG;
 				pitch = asin(dirj.y) * RADtoDEG;
-				p->target.z -= yaw * m_Params.avoid_pred_angular_amt;
-				p->target.y -= pitch * m_Params.avoid_pred_angular_amt;
+				//p->target.z -= yaw * m_Params.avoid_pred_angular_amt;
+				//p->target.y -= pitch * m_Params.avoid_pred_angular_amt;
 
-				if (dist > 40.0f) {
+				if (dist > 50.0f) {
 					new_state = ATTACK;				// predator far from flock, switch to attack
 					//printf("Distance reached, %f.\n", p->pos.y);
 				}
@@ -2217,7 +2217,7 @@ void Flock2::Advance_pred()
 
 				//printf("yaw: %f, pitch: %f\n", yaw, pitch);
 
-				if (dist < 3.0f) {
+				if (dist < 2.0f) {
 					new_state = HOVER;			// predator close to centroid, switch to hover
 					//printf("Centroid reached.\n");
 				}
@@ -3192,9 +3192,9 @@ void Flock2::display ()
 			RenderBirdsWithDart ();
 
 			// Draw predator with circle around it
-			float predator_size = 0.5f;
+			float predator_size = 0.1f;
 			Vec4F pclr (1,0,0,1);
-			for (int n = 0; n < m_Predators.GetNumElem(FPREDATOR); n++) {
+			for (int n = 0; n < m_Params.num_predators; n++) {
 				p = (Predator*)m_Predators.GetElem(FPREDATOR, n);
 
 				//printf("Predator is at: %f, %f, %f \n", p->pos.x, p->pos.y, p->pos.z);
@@ -3407,7 +3407,9 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 	case 'g': m_draw_grid = !m_draw_grid; break;
 	case 'o': m_draw_origin = !m_draw_origin; break;
 	case 'p': m_draw_plot = !m_draw_plot; break;
-  case 'c':
+	case 'e': m_Params.num_predators = (m_Params.num_predators + 1 ) % 2 ; break;
+
+	case 'c':
 		m_cockpit_view = !m_cockpit_view;
 		//m_cam_orient =
 		break;
