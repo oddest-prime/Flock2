@@ -3041,14 +3041,20 @@ void Flock2::RenderBirdsWithDart ()
 			}
 		}
 		if (m_visualize == VISUALIZE_CLUSTERS) {	// cluster coloring..
-			int order_n = cluster_order.at(b->cluster_id);
-			int bird_cnt = cluster_histogram.at(order_n).bird_cnt;
-			//if(order_n < 10)
-			if(bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
-				clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
-			else
-				clr = Vec4F(0.9, 0.9, 0.9, 1);
-		}
+		        try {
+			  int order_n = cluster_order.at(b->cluster_id);
+			  int bird_cnt = cluster_histogram.at(order_n).bird_cnt;
+			  //if(order_n < 10)
+			  if(bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
+				  clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
+			  else
+				  clr = Vec4F(0.9, 0.9, 0.9, 1);
+		          }
+		          catch (const std::out_of_range& oor)
+		          {
+				  clr = Vec4F(0.9, 0.9, 0.9, 1);
+		          }
+                }
 		// bird shape
 		if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 			// line

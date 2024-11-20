@@ -1,7 +1,7 @@
 cmake CMakeLists.txt \
     -DLIBMIN_ROOT=../libmin \
     -B../build/Flock2 \
-    -DBUILD_CUDA=false \
+    -DBUILD_CUDA=true \
     -DBUILD_OPENGL=true \
     -DBUILD_GLEW=true
 
