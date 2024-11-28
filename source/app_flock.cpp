@@ -1316,13 +1316,14 @@ void Flock2::CalculateClusters ()
 		cluster_order.at(cluster_histogram.at(i).cluster_id) = i;
 	}
 
+/*
 	printf("--------------------------------\n");
 	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
 		if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
 		//if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds / 20)
 			printf("cluster %d, %d elements, order %d\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt, cluster_order.at(cluster_histogram.at(i).cluster_id));
 	}
-
+*/
 }
 
 //----------------------------------------------------------------
@@ -1444,6 +1445,11 @@ void Flock2::UpdateFlockData ()
 		b = (Bird*) m_Birds.GetElem( FBIRD, i);
 		int gc = m_Birds.bufUI(FGCELL)[i];
 		if ( gc != GRID_UNDEF ) {
+			if(isnan(b->pos.x) || isnan(b->pos.y) || isnan(b->pos.z)) {
+				printf("Warning: Position for bird %d is NaN!\n", i);
+				continue;
+			}
+			assert(!isnan(b->pos.x) && !isnan(b->pos.y) && !isnan(b->pos.z));
 			centroid += b->pos;
 			speed += b->speed;
 			plift += b->Plift;
