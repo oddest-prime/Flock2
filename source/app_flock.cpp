@@ -134,6 +134,7 @@ public:
 	void			Reset (int num_bird, int num_pred);
 	void			Run ();
 	void			FindNeighbors ();
+	void 			AssignClusters ();
 	void 			CalculateClusters ();
 	void			AdvanceOrientationHoetzlein ();
 	void			AdvanceVectorsReynolds ();
@@ -285,7 +286,7 @@ Flock2 obj;
 	{
 		char cfn[512];
 		strcpy ( cfn, func.c_str() );
-		cuCheck ( cuModuleGetFunction ( &m_Kernel[fid], m_Module, cfn ), "LoadKernel", "cuModuleGetFunction", cfn, DEBUG_CUDA );
+		cuCheck ( cuModuleGetFunction ( &m_Kernel[fid], m_Module, cfn ), (char*)"LoadKernel", (char*)"cuModuleGetFunction", cfn, DEBUG_CUDA );
 	}
 
 	void Flock2::LoadAllKernels ()
@@ -296,7 +297,7 @@ Flock2 obj;
 			printf ( "ERROR: Unable to find %s\n", ptxfile.c_str() );
 			exit(-7);
 		}
-		cuCheck ( cuModuleLoad ( &m_Module, filepath.c_str() ), "LoadKernel", "cuModuleLoad", "flock_kernels.ptx", DEBUG_CUDA );
+		cuCheck ( cuModuleLoad ( &m_Module, filepath.c_str() ), (char*)"LoadKernel", (char*)"cuModuleLoad", (char*)"flock_kernels.ptx", DEBUG_CUDA );
 
 		LoadKernel ( KERNEL_INSERT,					"insertParticles" );
 		LoadKernel ( KERNEL_COUNTING_SORT,			"countingSortFull" );
@@ -388,7 +389,7 @@ void Flock2::DefaultParams ()
 	// SI units:
 	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)
 	//
-	m_Params.num_birds = 1000; // 	10000
+	m_Params.num_birds = 10000; // 	10000
 	m_Params.num_predators = 1; //	0
 	m_Params.neighbors = 7;
 
@@ -701,18 +702,18 @@ void Flock2::Reset (int num, int num_pred )
 				m_kernels_loaded = true;
 				LoadAllKernels ();
 				size_t len;
-				cuCheck ( cuModuleGetGlobal ( &m_cuAccel,  &len, m_Module, "FAccel" ), "Initialize", "cuModuleGetGlobal", "cuAccel", true );
-				cuCheck ( cuModuleGetGlobal ( &m_cuParam, &len, m_Module, "FParams" ), "Initialize", "cuModuleGetGlobal", "cuParam", true );
-				cuCheck ( cuModuleGetGlobal ( &m_cuFlock, &len, m_Module, "FFlock" ), "Initialize", "cuModuleGetGlobal", "cuFlock", true );
+				cuCheck ( cuModuleGetGlobal ( &m_cuAccel,  &len, m_Module, "FAccel" ), (char*)"Initialize", (char*)"cuModuleGetGlobal", (char*)"cuAccel", true );
+				cuCheck ( cuModuleGetGlobal ( &m_cuParam, &len, m_Module, "FParams" ), (char*)"Initialize", (char*)"cuModuleGetGlobal", (char*)"cuParam", true );
+				cuCheck ( cuModuleGetGlobal ( &m_cuFlock, &len, m_Module, "FFlock" ), (char*)"Initialize", (char*)"cuModuleGetGlobal", (char*)"cuFlock", true );
 			}
 			// Assign GPU symbols
 			m_Birds.AssignToGPU ( "FBirds", m_Module );
 			m_BirdsTmp.AssignToGPU ( "FBirdsTmp", m_Module );
 			m_Grid.AssignToGPU ( "FGrid", m_Module );
 			m_Predators.AssignToGPU ( "FPredators", m_Module );			// predators
-			cuCheck ( cuMemcpyHtoD ( m_cuAccel, &m_Accel,	sizeof(Accel) ),	"Accel", "cuMemcpyHtoD", "cuAccel", DEBUG_CUDA );
-			cuCheck ( cuMemcpyHtoD ( m_cuParam, &m_Params, sizeof(Params) ),"Params", "cuMemcpyHtoD", "cuParam", DEBUG_CUDA );
-			cuCheck ( cuMemcpyHtoD ( m_cuFlock, &m_Flock, sizeof(Flock) ),	"Flock", "cuMemcpyHtoD", "cuFlock", DEBUG_CUDA );
+			cuCheck ( cuMemcpyHtoD ( m_cuAccel, &m_Accel,	sizeof(Accel) ),	(char*)"Accel", (char*)"cuMemcpyHtoD", (char*)"cuAccel", DEBUG_CUDA );
+			cuCheck ( cuMemcpyHtoD ( m_cuParam, &m_Params, sizeof(Params) ),(char*)"Params", (char*)"cuMemcpyHtoD", (char*)"cuParam", DEBUG_CUDA );
+			cuCheck ( cuMemcpyHtoD ( m_cuFlock, &m_Flock, sizeof(Flock) ),	(char*)"Flock", (char*)"cuMemcpyHtoD", (char*)"cuFlock", DEBUG_CUDA );
 
 			// Commit birds
 			m_Birds.CommitAll ();
@@ -856,15 +857,15 @@ void Flock2::InsertIntoGrid ()
 
 		#ifdef BUILD_CUDA
 			// Reset all grid cells to empty
-			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDCNT),	0,	m_Accel.gridTotal*sizeof(uint) ), "InsertParticlesCUDA", "cuMemsetD8", "AGRIDCNT", DEBUG_CUDA );
-			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDOFF),	0,	m_Accel.gridTotal*sizeof(uint) ), "InsertParticlesCUDA", "cuMemsetD8", "AGRIDOFF", DEBUG_CUDA );
-			cuCheck ( cuMemsetD8 ( m_Birds.gpu(FGCELL),		0,	numPoints*sizeof(int) ), "InsertParticlesCUDA", "cuMemsetD8", "FGCELL", DEBUG_CUDA );
-			cuCheck ( cuMemsetD8 ( m_Birds.gpu(FGNDX),		0,	numPoints*sizeof(int) ), "InsertParticlesCUDA", "cuMemsetD8", "FGNDX", DEBUG_CUDA );
+			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDCNT),	0,	m_Accel.gridTotal*sizeof(uint) ), (char*)"InsertParticlesCUDA", (char*)"cuMemsetD8", (char*)"AGRIDCNT", DEBUG_CUDA );
+			cuCheck ( cuMemsetD8 ( m_Grid.gpu(AGRIDOFF),	0,	m_Accel.gridTotal*sizeof(uint) ), (char*)"InsertParticlesCUDA", (char*)"cuMemsetD8", (char*)"AGRIDOFF", DEBUG_CUDA );
+			cuCheck ( cuMemsetD8 ( m_Birds.gpu(FGCELL),		0,	numPoints*sizeof(int) ), (char*)"InsertParticlesCUDA", (char*)"cuMemsetD8", (char*)"FGCELL", DEBUG_CUDA );
+			cuCheck ( cuMemsetD8 ( m_Birds.gpu(FGNDX),		0,	numPoints*sizeof(int) ), (char*)"InsertParticlesCUDA", (char*)"cuMemsetD8", (char*)"FGNDX", DEBUG_CUDA );
 
 			// Insert into grid (GPU)
 			void* args[1] = { &numPoints };
 			cuCheck(cuLaunchKernel ( m_Kernel[KERNEL_INSERT], m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL),
-				"InsertParticlesCUDA", "cuLaunch", "FUNC_INSERT", DEBUG_CUDA );
+				(char*)"InsertParticlesCUDA", (char*)"cuLaunch", (char*)"FUNC_INSERT", DEBUG_CUDA );
 		#endif
 
 	} else {
@@ -940,22 +941,22 @@ void Flock2::PrefixSumGrid ()
 			// prefix scan in blocks with up to two hierarchy layers
 			// this allows total # elements up to SCAN_BLOCKSIZE^3 = 512^3 = 134 million max
 			void* argsA[5] = {&array1, &scan1, &array2, &numElem1, &zero_offsets }; // sum array1. output -> scan1, array2
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], numElem2, 1, 1, threads, 1, 1, 0, NULL, argsA, NULL ), "PrefixSumCellsCUDA", "cuLaunch", "FUNC_PREFIXSUM:A", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], numElem2, 1, 1, threads, 1, 1, 0, NULL, argsA, NULL ), (char*)"PrefixSumCellsCUDA", (char*)"cuLaunch", (char*)"FUNC_PREFIXSUM:A", DEBUG_CUDA );
 
 			void* argsB[5] = { &array2, &scan2, &array3, &numElem2, &zon }; // sum array2. output -> scan2, array3
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], numElem3, 1, 1, threads, 1, 1, 0, NULL, argsB, NULL ), "PrefixSumCellsCUDA", "cuLaunch", "FUNC_PREFIXSUM:B", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], numElem3, 1, 1, threads, 1, 1, 0, NULL, argsB, NULL ), (char*)"PrefixSumCellsCUDA", (char*)"cuLaunch", (char*)"FUNC_PREFIXSUM:B", DEBUG_CUDA );
 
 			if ( numElem3 > 1 ) {
 				CUdeviceptr nptr = {0};
 				void* argsC[5] = { &array3, &scan3, &nptr, &numElem3, &zon };	// sum array3. output -> scan3
-				cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], 1, 1, 1, threads, 1, 1, 0, NULL, argsC, NULL ), "PrefixSumCellsCUDA", "cuLaunch", "FUNC_PREFIXFIXUP:C", DEBUG_CUDA );
+				cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXSUM], 1, 1, 1, threads, 1, 1, 0, NULL, argsC, NULL ), (char*)"PrefixSumCellsCUDA", (char*)"cuLaunch", (char*)"FUNC_PREFIXFIXUP:C", DEBUG_CUDA );
 
 				void* argsD[3] = { &scan2, &scan3, &numElem2 };	// merge scan3 into scan2. output -> scan2
-				cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXFIXUP], numElem3, 1, 1, threads, 1, 1, 0, NULL, argsD, NULL ), "PrefixSumCellsCUDA", "cuLaunch", "FUNC_PREFIXFIXUP:D", DEBUG_CUDA );
+				cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXFIXUP], numElem3, 1, 1, threads, 1, 1, 0, NULL, argsD, NULL ), (char*)"PrefixSumCellsCUDA", (char*)"cuLaunch", (char*)"FUNC_PREFIXFIXUP:D", DEBUG_CUDA );
 			}
 
 			void* argsE[3] = { &scan1, &scan2, &numElem1 };		// merge scan2 into scan1. output -> scan1
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXFIXUP], numElem2, 1, 1, threads, 1, 1, 0, NULL, argsE, NULL ), "PrefixSumCellsCUDA", "cuLaunch", "FUNC_PREFIXFIXUP:E", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FPREFIXFIXUP], numElem2, 1, 1, threads, 1, 1, 0, NULL, argsE, NULL ), (char*)"PrefixSumCellsCUDA", (char*)"cuLaunch", (char*)"FUNC_PREFIXFIXUP:E", DEBUG_CUDA );
 			// returns grid offsets: scan1 => AGRIDOFF
 
 			// Counting Sort
@@ -968,7 +969,7 @@ void Flock2::PrefixSumGrid ()
 			int numPoints = m_Params.num_birds;
 			void* args[1] = { &numPoints };
 			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_COUNTING_SORT], m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL),
-						"CountingSortFullCUDA", "cuLaunch", "FUNC_COUNTING_SORT", DEBUG_CUDA );
+						(char*)"CountingSortFullCUDA", (char*)"cuLaunch", (char*)"FUNC_COUNTING_SORT", DEBUG_CUDA );
 		#endif
 
 	} else {
@@ -1012,17 +1013,13 @@ void Flock2::PrefixSumGrid ()
 
 void Flock2::FindNeighbors ()
 {
-
 	if (m_gpu) {
-
 		#ifdef BUILD_CUDA
 			// Find neighborhood (GPU)
-			//
 			int numPoints = m_Params.num_birds;
 			void* args[1] = { &numPoints };
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FIND_NBRS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "FindNeighbors", "cuLaunch", "FUNC_FIND_NBRS", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_FIND_NBRS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), (char*)"FindNeighbors", (char*)"cuLaunch", (char*)"FUNC_FIND_NBRS", DEBUG_CUDA );
 		#endif
-
 	} else {
 
 		// Find neighborhood of each bird to compute:
@@ -1054,7 +1051,7 @@ void Flock2::FindNeighbors ()
 		float sort_d_nbr[16];
 		int sort_j_nbr[16];
 		int sort_num = 0;
-		sort_d_nbr[0] = 10^5;
+		sort_d_nbr[0] = 1e5;
 		sort_j_nbr[0] = -1;
 		int k, m;
 
@@ -1063,13 +1060,13 @@ void Flock2::FindNeighbors ()
 
 		int numPoints = m_Params.num_birds;
 
-		// for each bird..
+		// for each bird
 		for (int i=0; i < numPoints; i++) {
 			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
 			bi->cluster_id = -1; // reset all cluster assignments
 		}
 
-		// for each bird..
+		// for each bird
 		for (int i=0; i < numPoints; i++) {
 
 			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
@@ -1199,6 +1196,83 @@ void Flock2::FindNeighbors ()
 	}
 }
 
+void Flock2::AssignClusters ()
+{
+	if (m_gpu) {
+		// assign clusters on CPU.
+		// TODO: port this to run on GPU!
+
+		int j;
+		Vec3F posi, posj, dist;
+		float dsq;
+		Bird *bi, *bj, *bk;
+		int cluster_min_nbs_id = -1;
+
+		int numPoints = m_Params.num_birds;
+
+		max_cluster_id = -1;
+		cluster_assignment.clear();
+
+		// for each bird
+		for (int i=0; i < numPoints; i++) {
+			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
+			bi->cluster_id = -1; // reset all cluster assignments
+		}
+
+		// for each bird
+		for (int i=0; i < numPoints; i++) {
+			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
+
+			if(bi->cluster_id == -1) { // no cluster assigned yet for this bird
+				// get minimum cluster id of all neighbors
+				cluster_min_nbs_id = -1;
+				for ( int l = 0; l < bi->cluster_nbr_cnt; l++ ) { // for each neighbor
+					j = bi->cluster_nbrs[l];
+					bj = (Bird*) m_Birds.GetElem( FBIRD, j );
+					if(bj->cluster_id != -1 && (bj->cluster_id < cluster_min_nbs_id || cluster_min_nbs_id == -1))
+						cluster_min_nbs_id = bj->cluster_id;
+				}
+
+				if(cluster_min_nbs_id == -1) {
+					max_cluster_id ++;
+					bi->cluster_id = max_cluster_id;
+					vector<int> new_cluster(1);
+					new_cluster.at(0) = i;
+					cluster_assignment.push_back(new_cluster);
+				}
+				else {
+					bi->cluster_id = cluster_min_nbs_id;
+					cluster_assignment.at(bi->cluster_id).push_back(i);
+				}
+			}
+
+			for ( int l = 0; l < bi->cluster_nbr_cnt; l++ ) { // for each neighbor
+				j = bi->cluster_nbrs[l];
+				bj = (Bird*) m_Birds.GetElem( FBIRD, j );
+
+				if(bj->cluster_id == -1) { // no cluster assigned yet for neighbor bird
+					bj->cluster_id = bi->cluster_id; // put both birds in same cluster
+					cluster_assignment.at(bi->cluster_id).push_back(j);
+				}
+				if(bj->cluster_id != bi->cluster_id) { // already assigned another cluster for neighbor bird, need to merge clusters
+					int merge_from_id = bj->cluster_id;
+					int merge_to_id = bi->cluster_id;
+
+					//printf("merge bird %d (cluster %d) to bird %d (cluster %d) \n", j, merge_from_id, i, merge_to_id);
+					for(unsigned int k = 0; k < cluster_assignment.at(merge_from_id).size(); k++) {
+						int kk = cluster_assignment.at(merge_from_id).at(k);
+						//printf("     bird %d -> %d\n", kk, merge_to_id);
+						bk = (Bird*) m_Birds.GetElem( FBIRD, cluster_assignment.at(merge_from_id).at(k));
+						bk->cluster_id = merge_to_id; // put birds in same cluster
+						cluster_assignment.at(merge_to_id).push_back(cluster_assignment.at(merge_from_id).at(k));
+					}
+					cluster_assignment.at(merge_from_id).clear();
+				}
+			}
+		}
+	}
+}
+
 void Flock2::CalculateClusters ()
 {
 	//printf("max_cluster_id = %d \n", max_cluster_id);
@@ -1234,18 +1308,19 @@ void Flock2::CalculateClusters ()
 	}
 
 	std::sort(cluster_histogram.begin(), cluster_histogram.end(), std::greater<>());
-/*
-	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
-		if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds / 20)
-			printf("cluster %d, %d elem.\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt);
-	}
-	*/
 
 	cluster_order.clear();
 	cluster_order.resize(cluster_assignment.size());
 
 	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
 		cluster_order.at(cluster_histogram.at(i).cluster_id) = i;
+	}
+
+	printf("--------------------------------\n");
+	for(unsigned int i = 0; i < cluster_histogram.size(); i++) {
+		if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
+		//if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds / 20)
+			printf("cluster %d, %d elements, order %d\n", cluster_histogram.at(i).cluster_id, cluster_histogram.at(i).bird_cnt, cluster_order.at(cluster_histogram.at(i).cluster_id));
 	}
 
 }
@@ -1399,7 +1474,7 @@ void Flock2::UpdateFlockData ()
 	if ( m_gpu ) {
 		#ifdef BUILD_CUDA
 			// transfer flock data to GPU, eg. centroid
-			cuCheck ( cuMemcpyHtoD ( m_cuFlock, &m_Flock, sizeof(Flock) ),	"Flock", "cuMemcpyHtoD", "cuFlock", DEBUG_CUDA );
+			cuCheck ( cuMemcpyHtoD ( m_cuFlock, &m_Flock, sizeof(Flock) ),	(char*)"Flock", (char*)"cuMemcpyHtoD", (char*)"cuFlock", DEBUG_CUDA );
 
 			// transfer predators to GPU
 			m_Predators.CommitAll ();
@@ -1808,7 +1883,7 @@ void Flock2::AdvanceOrientationHoetzlein ()
 			//
 			void* args[4] = { &m_time, &m_Params.DT, &m_Accel.sim_scale, &m_Params.num_birds };
 
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_ORIENT],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "Advance", "cuLaunch", "FUNC_ADVANCE", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_ORIENT],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), (char*)"Advance", (char*)"cuLaunch", (char*)"FUNC_ADVANCE", DEBUG_CUDA );
 
 			// Retrieve birds from GPU for rendering & visualization
 			m_Birds.Retrieve ( FBIRD );
@@ -2089,7 +2164,7 @@ void Flock2::AdvanceVectorsReynolds ()
 			// Advance - GPU
 			//
 			void* args[4] = { &m_time, &m_Params.DT, &m_Accel.sim_scale, &m_Params.num_birds };
-			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_VECTORS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), "Advance", "cuLaunch", "FUNC_ADVANCE", DEBUG_CUDA );
+			cuCheck ( cuLaunchKernel ( m_Kernel[KERNEL_ADVANCE_VECTORS],  m_Accel.numBlocks, 1, 1, m_Accel.numThreads, 1, 1, 0, NULL, args, NULL), (char*)"Advance", (char*)"cuLaunch", (char*)"FUNC_ADVANCE", DEBUG_CUDA );
 
 			// Retrieve birds from GPU for rendering & visualization
 			m_Birds.Retrieve ( FBIRD );
@@ -2404,7 +2479,7 @@ void Flock2::SelectBird (float x, float y)
 	Bird* b;
 
 	best_id = -1;
-	best_dist = 10^5;
+	best_dist = 1e5;
 
 	// find the bird nearest to camera ray
 	for (int i=0; i < m_Params.num_birds; i++) {
@@ -2620,15 +2695,16 @@ void Flock2::Run ()
 	//--- Find neighbors
 	FindNeighbors ();
 
-	//--- Calculate cluster metrics
-	CalculateClusters ();
-
 	//--- Advance birds
 	if ( m_method==0 ) {
 		AdvanceOrientationHoetzlein ();			// 2024 Hoetzlein, Flock2
 	} else {
 		AdvanceVectorsReynolds ();					// 1987 Reynolds, Boids
 	}
+
+	//--- Calculate cluster metrics (after Advance*(), because need to Retrieve data first)
+	AssignClusters ();
+	CalculateClusters ();
 
 	//--- Advance predators
 	Advance_pred();
@@ -2967,9 +3043,9 @@ void Flock2::RenderBirdsWithMesh (int i)
 
 	// Render birds
 	Bird* b;
-	for (int n = 0; n < m_Birds .GetNumElem(0); n++) {
+	for (int n = 0; n < m_Birds.GetNumElem(FBIRD); n++) {
 
-		b = (Bird*) m_Birds.GetElem(0, n);
+		b = (Bird*) m_Birds.GetElem(FBIRD, n);
 
 		model.Identity();
 		//model.Scale (10,10,10);
@@ -3026,10 +3102,10 @@ void Flock2::RenderBirdsWithDart ()
 	Bird* b;
 	float bird_size = 0.10f; //0.05f;
 
-	for (int n = 0; n < m_Birds.GetNumElem(0); n++) {
+	for (int n = 0; n < m_Birds.GetNumElem(FBIRD); n++) {
 
 		// bird color
-		b = (Bird*)m_Birds.GetElem(0, n);
+		b = (Bird*)m_Birds.GetElem(FBIRD, n);
 		clr = Vec4F(0, 0, 0, 1);					// default. black on sky/white.
 		if (m_visualize == VISUALIZE_INFOVIS) {		// infovis coloring..
 			if (b->clr.w == 0) {
@@ -3041,20 +3117,22 @@ void Flock2::RenderBirdsWithDart ()
 			}
 		}
 		if (m_visualize == VISUALIZE_CLUSTERS) {	// cluster coloring..
-		        try {
+	        try {
 			  int order_n = cluster_order.at(b->cluster_id);
 			  int bird_cnt = cluster_histogram.at(order_n).bird_cnt;
+
+			  //printf("draw cluster_id %d, order_n %d, bird_cnt %d \n", b->cluster_id, order_n, bird_cnt);
 			  //if(order_n < 10)
 			  if(bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
 				  clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
 			  else
 				  clr = Vec4F(0.9, 0.9, 0.9, 1);
-		          }
-		          catch (const std::out_of_range& oor)
-		          {
-				  clr = Vec4F(0.9, 0.9, 0.9, 1);
-		          }
-                }
+	          }
+          catch (const std::out_of_range& oor)
+          {
+		  clr = Vec4F(0.9, 0.5, 0.5, 1);
+          }
+        }
 		// bird shape
 		if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
 			// line
@@ -3260,7 +3338,7 @@ void Flock2::display ()
 		for (float v=m_Params.min_speed; v < m_Params.max_speed; v+=1) {		// meters/sec
 			drawLine ( Vec2F( (v/xscal)*1000, 600-10), Vec2F( (v/xscal)*1000, 600), clr );		// x-axis ticks
 		}
-		for (int n=0; n < m_Birds.GetNumElem(0); n++) {
+		for (int n=0; n < m_Birds.GetNumElem(FBIRD); n++) {
 			b = (Bird*) m_Birds.GetElem(0, n);
 			//drawCircle ( Vec2F( (b->speed/xscal)*1000, 600 - (b->Pturn / yscal)*200 ), 1.0, clr);
 			drawCircle ( Vec2F( (b->speed/xscal)*1000, 600 - (b->Ptotal / yscal)*200 ), 1.0, clr);
@@ -3427,7 +3505,7 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 		break;
 	case 'x':
 		m_bird_sel++;
-		if (m_bird_sel > m_Birds.GetNumElem(0)) m_bird_sel = m_Birds.GetNumElem(0)-1;
+		if (m_bird_sel > m_Birds.GetNumElem(FBIRD)) m_bird_sel = m_Birds.GetNumElem(FBIRD)-1;
 		break;
 	};
 	// printf ( "%d \n", m_bird_sel );

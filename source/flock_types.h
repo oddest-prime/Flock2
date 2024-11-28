@@ -88,6 +88,8 @@
 		float		Plift, Pdrag, Pfwd, Pturn, Ptotal;
 
 		int			cluster_id;
+		uint		cluster_nbrs[128];
+		uint		cluster_nbr_cnt;
 	};
 
 	// entire flock states

@@ -33,16 +33,17 @@ __constant__ cuDataX	FPredators;		// predators
 
 extern "C" __global__ void insertParticles ( int pnum )
 {
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index				
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index
 	if ( i >= pnum ) return;
-	
+
 	register float3	p;
 	register float3	gcf;
-	register int3		gc;	
-	register int		gs;	
+	register int3		gc;
+	register int		gs;
 
+	//((Bird*) FBirds.data(FBIRD))[i].cluster_id = -1; // reset cluster assignment
 	p = ((Bird*) FBirds.data(FBIRD))[i].pos;
-	gcf = (p - FAccel.gridMin) * FAccel.gridDelta; 
+	gcf = (p - FAccel.gridMin) * FAccel.gridDelta;
 	gc = make_int3( int(gcf.x), int(gcf.y), int(gcf.z) );
 	gs = (gc.y * FAccel.gridRes.z + gc.z) * FAccel.gridRes.x + gc.x;
 
@@ -50,8 +51,8 @@ extern "C" __global__ void insertParticles ( int pnum )
 		FBirds.bufI(FGCELL)[i] = gs;													// Grid cell insert.
 		FBirds.bufI(FGNDX)[i] = atomicAdd ( &FGrid.bufI(AGRIDCNT)[ gs ], 1 );		// Grid counts.
 	} else {
-		FBirds.bufI(FGCELL)[i] = GRID_UNDEF;		
-	}	
+		FBirds.bufI(FGCELL)[i] = GRID_UNDEF;
+	}
 
 	//--- debugging
 	/*if ( i==0 ) {
@@ -68,62 +69,63 @@ __device__ void debugAccess ()
 {
 	printf ( "--- gpu bufs\n" );
 	for (int i=0; i < 8; i++)
-		printf ( "%d: %012llx   %012llx\n", i, FBirds.bufI(i), FBirdsTmp.bufI(i) );	
+		printf ( "%d: %012llx   %012llx\n", i, FBirds.bufI(i), FBirdsTmp.bufI(i) );
 }
 
 extern "C" __global__ void countingSortFull ( int pnum )
 {
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;		// particle index				
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;		// particle index
 	if ( i >= pnum ) return;
 
 	// This algorithm is O(2NK) in space, O(N/P) time, where K=sizeof(Fluid)
 	// Copy particle from original, unsorted buffer (msortbuf),
-	// into sorted memory location on device (mpos/mvel). 
-	
-	// **NOTE** We cannot use shared memory for temporary storage since this is a 
-	// global reordering and there is no synchronization across blocks. 
+	// into sorted memory location on device (mpos/mvel).
 
-	int icell = FBirdsTmp.bufI(FGCELL) [ i ];	
+	// **NOTE** We cannot use shared memory for temporary storage since this is a
+	// global reordering and there is no synchronization across blocks.
 
-	if ( icell != GRID_UNDEF ) {	  
-		// Determine the sort_ndx; location of the particle after sort		
-		int indx =  FBirdsTmp.bufI(FGNDX)  [ i ];		
-	  int sort_ndx = FGrid.bufI(AGRIDOFF) [ icell ] + indx ;	// global_ndx = grid_cell_offet + particle_offset	
-		
-		// Transfer data to sort location	
-		
-		memcpy ( ((Bird*) FBirds.data(FBIRD)) + sort_ndx, ((Bird*) FBirdsTmp.data(FBIRD)) + i, sizeof(Bird) );		
-		
+	int icell = FBirdsTmp.bufI(FGCELL) [ i ];
+
+	if ( icell != GRID_UNDEF ) {
+		// Determine the sort_ndx; location of the particle after sort
+		int indx =  FBirdsTmp.bufI(FGNDX)  [ i ];
+	  int sort_ndx = FGrid.bufI(AGRIDOFF) [ icell ] + indx ;	// global_ndx = grid_cell_offet + particle_offset
+
+		// Transfer data to sort location
+
+		memcpy ( ((Bird*) FBirds.data(FBIRD)) + sort_ndx, ((Bird*) FBirdsTmp.data(FBIRD)) + i, sizeof(Bird) );
+
 		Bird* b = ((Bird*) FBirds.data(FBIRD)) + sort_ndx;
 		Bird* bt = ((Bird*) FBirdsTmp.data(FBIRD)) + i;
 
 		FBirds.bufI (FGCELL) [sort_ndx] =	icell;
-		FBirds.bufI (FGNDX) [sort_ndx] =	indx; 		
+		FBirds.bufI (FGNDX) [sort_ndx] =	indx;
 
-		FGrid.bufI (AGRID) [ sort_ndx ] =	sort_ndx;			// full sort, grid indexing becomes identity				
+		FGrid.bufI (AGRID) [ sort_ndx ] =	sort_ndx;			// full sort, grid indexing becomes identity
 	}
-} 
+}
 
 
-	
+
 
 extern "C" __global__ void findNeighborsTopological ( int pnum)
-{			
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index				
+{
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index
 	if ( i >= pnum ) return;
 
-	// Get search cell	
+	// Get search cell
 	uint gc = FBirds.bufUI(FGCELL)[ i ];
 	if ( gc == GRID_UNDEF ) return;						// particle out-of-range
 	gc -= (1*FAccel.gridRes.z + 1)*FAccel.gridRes.x + 1;
 
-	register int cell, c, j, cndx;	
+	register int cell, c, j, cndx;
 	register float3 dist, diri;
 	register float dsq, nearest;
-	Bird *bi, *bj;	
+	Bird *bi, *bj;
 	float pi, pj;
 	const float d2 = (FAccel.sim_scale * FAccel.sim_scale);
-	const float rd2 = (FAccel.psmoothradius * FAccel.psmoothradius) / d2;	
+	const float rd2 = (FAccel.psmoothradius * FAccel.psmoothradius) / d2;
+	const float rc = FParams.cluster_threshold_dist * FParams.cluster_threshold_dist;
 	float birdang;
 	int k, m;
 
@@ -135,8 +137,8 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 	sort_j_nbr[0] = -1;
 
 	// current bird
-	bi = ((Bird*) FBirds.data(FBIRD)) + i;	
-	bi->near_j = -1;	
+	bi = ((Bird*) FBirds.data(FBIRD)) + i;
+	bi->near_j = -1;
 	bi->t_nbrs = 0;
 	bi->r_nbrs = 0;
 	bi->ave_pos = make_float3(0,0,0);
@@ -144,21 +146,29 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 	bi->ave_del = make_float3(0,0,0);
 	diri = normalize ( bi->vel );
 
+	// clustering
+	bi->cluster_nbr_cnt = 0;
+
 	nearest = rd2;
 
-	// check 3x3 grid cells	
+	// check 3x3 grid cells
 	for ( c=0; c < FAccel.gridAdjCnt; c++) {
-		cell = gc + FAccel.gridAdj[c];		
+		cell = gc + FAccel.gridAdj[c];
 		// check each entry in grid..
 		for ( cndx = FGrid.bufI(AGRIDOFF)[cell]; cndx < FGrid.bufI(AGRIDOFF)[cell] + FGrid.bufI(AGRIDCNT)[cell]; cndx++ ) {
-			j = FGrid.bufI(AGRID)[ cndx ];				
+			j = FGrid.bufI(AGRID)[ cndx ];
 			if (i==j) continue;
 
 			bj = ((Bird*) FBirds.data(FBIRD)) + j;
 
 			// check for neighbor
-			dist = ( bj->pos - bi->pos );		
+			dist = ( bj->pos - bi->pos );
 			dsq = (dist.x*dist.x + dist.y*dist.y + dist.z*dist.z);
+
+			if ( dsq < rc && bi->cluster_nbr_cnt < 128 ) { // bird is closer than cluster threshold
+				bi->cluster_nbrs[bi->cluster_nbr_cnt] = j;
+				bi->cluster_nbr_cnt++;
+			}
 
 			if ( dsq < rd2 ) {
 				// neighbor is within check radius..
@@ -166,13 +176,13 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 				// confirm bird is within forward field-of-view
 				dsq = sqrt(dsq);
 				dist /= dsq;
-				birdang = dot ( diri, dist );				
-				if (birdang > FParams.fovcos ) {					
-					
-					// put into topological sorted list					
+				birdang = dot ( diri, dist );
+				if (birdang > FParams.fovcos ) {
+
+					// put into topological sorted list
 					for (k = 0; dsq > sort_d_nbr[k] && k < sort_num;)
 						k++;
-					
+
 					// only insert if bird is closer than the top N
 					if (k <= sort_num) {
 						// shift others down (insertion sort)
@@ -182,28 +192,28 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 								sort_j_nbr[m+1] = sort_j_nbr[m];
 							}
 						}
-						
+
 						sort_d_nbr[k] = dsq;
 						sort_j_nbr[k] = j;
-						
+
 						// max topological neighbors
 						if (++sort_num > FParams.neighbors ) sort_num = FParams.neighbors;
-					}	
+					}
 
 					// count boundary neighbors
 					bi->r_nbrs++;
-					
+
 				}
-			}	
-		}		
+			}
+		}
 	}
 
 	// compute nearest and average among N (~7) topological neighbors
 	for (k=0; k < sort_num; k++) {
 		bj = ((Bird*) FBirds.data(FBIRD)) + sort_j_nbr[k];
 		bi->ave_pos += bj->pos;
-		bi->ave_vel += bj->vel;		
-		bi->ave_del += normalize (bj->pos - bi->pos) ;	
+		bi->ave_vel += bj->vel;
+		bi->ave_del += normalize (bj->pos - bi->pos) ;
 	}
 	bi->near_j = sort_j_nbr[0];
 
@@ -214,32 +224,43 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 		bi->ave_del *= (1.0f / sort_num );
 	}
 
+	/*for ( c=0; c < bi->cluster_nbr_cnt; c++) {
+		bj = ((Bird*) FBirds.data(FBIRD)) + j;
+		atomicCAS(&(bj->cluster_id), -1, bi->cluster_id);
+	}*/
+	//bi->cluster_id = i;
+	if(bi->cluster_nbr_cnt > 120)
+		printf("High density: Bird %d has %d neighbors.\n", i, bi->cluster_nbr_cnt);
+//	printf("%d c %d\n", i, bi->cluster_id);
 }
 
 extern "C" __global__ void findNeighbors ( int pnum)
-{			
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index				
+{
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index
 	if ( i >= pnum ) return;
 
-	// Get search cell	
+	// Get search cell
 	uint gc = FBirds.bufI(FGCELL)[ i ];
 	if ( gc == GRID_UNDEF ) return;						// particle out-of-range
 	gc -= (1*FAccel.gridRes.z + 1)*FAccel.gridRes.x + 1;
 
-	register int cell, c, j, cndx;	
+	register int cell, c, j, cndx;
 	register float3 dist, diri;
 	register float dsq, nearest;
-	Bird *bi, *bj;	
+	Bird *bi, *bj;
 	float pi, pj;
 	const float d2 = (FAccel.sim_scale * FAccel.sim_scale);
-	const float rd2 = (FAccel.psmoothradius * FAccel.psmoothradius) / d2;	
-	
-	float birdang;	
+	const float rd2 = (FAccel.psmoothradius * FAccel.psmoothradius) / d2;
+	const float rc = FParams.cluster_threshold_dist * FParams.cluster_threshold_dist;
+
+	float birdang;
 	float del_sum = 0;
 
+	int cluster_n_birds = 0;
+
 	// current bird
-	bi = ((Bird*) FBirds.data(FBIRD)) + i;	
-	bi->near_j = -1;	
+	bi = ((Bird*) FBirds.data(FBIRD)) + i;
+	bi->near_j = -1;
 	bi->r_nbrs = 0;
 	bi->t_nbrs = 0;
 	bi->ave_pos = make_float3(0,0,0);
@@ -249,19 +270,23 @@ extern "C" __global__ void findNeighbors ( int pnum)
 
 	nearest = rd2;
 
-	// check 3x3 grid cells	
+	// check 3x3 grid cells
 	for ( c=0; c < FAccel.gridAdjCnt; c++) {
-		cell = gc + FAccel.gridAdj[c];		
+		cell = gc + FAccel.gridAdj[c];
 		// check each entry in grid..
 		for ( cndx = FGrid.bufI(AGRIDOFF)[cell]; cndx < FGrid.bufI(AGRIDOFF)[cell] + FGrid.bufI(AGRIDCNT)[cell]; cndx++ ) {
-			j = FGrid.bufI(AGRID)[ cndx ];				
+			j = FGrid.bufI(AGRID)[ cndx ];
 			if (i==j) continue;
 
 			bj = ((Bird*) FBirds.data(FBIRD)) + j;
 
 			// check for neighbor
-			dist = ( bj->pos - bi->pos );		
+			dist = ( bj->pos - bi->pos );
 			dsq = (dist.x*dist.x + dist.y*dist.y + dist.z*dist.z);
+
+			if ( dsq < rc ) { // bird is closer than cluster threshold
+				cluster_n_birds++;
+			}
 
 			if ( dsq < rd2 ) {
 				// neighbor is within check radius..
@@ -270,11 +295,10 @@ extern "C" __global__ void findNeighbors ( int pnum)
 				dsq = sqrt( dsq );
 				dist /= dsq;
 				birdang = dot ( diri, dist );
-				
+
 				if (birdang > FParams.fovcos ) {
 
 					// find nearest
-					
 					if ( dsq < nearest ) {
 						nearest = dsq;
 						bi->near_j = j;
@@ -285,8 +309,8 @@ extern "C" __global__ void findNeighbors ( int pnum)
 					bi->ave_vel += bj->vel;
 					bi->r_nbrs++;
 				}
-			}	
-		}		
+			}
+		}
 	}
 
 	if (bi->r_nbrs > 0 ) {
@@ -295,14 +319,17 @@ extern "C" __global__ void findNeighbors ( int pnum)
 		bi->ave_vel *= (1.0f / bi->r_nbrs);
 	}
 
+	printf("%d - %d\n", i, cluster_n_birds);
+
+
 }
 
 __device__ uint getGridCell ( float3 pos, uint3& gc )
-{	
+{
 	gc.x = (int)( (pos.x - FAccel.gridMin.x) * FAccel.gridDelta.x);			// Cell in which particle is located
 	gc.y = (int)( (pos.y - FAccel.gridMin.y) * FAccel.gridDelta.y);
-	gc.z = (int)( (pos.z - FAccel.gridMin.z) * FAccel.gridDelta.z);		
-	return (int) ( (gc.y * FAccel.gridRes.z + gc.z) * FAccel.gridRes.x + gc.x);	
+	gc.z = (int)( (pos.z - FAccel.gridMin.z) * FAccel.gridDelta.z);
+	return (int) ( (gc.y * FAccel.gridRes.z + gc.z) * FAccel.gridRes.x + gc.x);
 }
 
 #define maxf(a,b)  (a>b ? a : b)
@@ -311,13 +338,13 @@ inline __device__ __host__ float circleDelta(float b, float a)
 {
 	float d = b-a;
 	d = (d > 180) ? d-360 : (d<-180) ? d+360 : d;
-	return d;	
+	return d;
 }
 
 
 extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, float ss, int numPnts )
-{		
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index				
+{
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index
 	if ( i >= numPnts ) return;
 
 	uint gc = FBirds.bufUI(FGCELL)[ i ];
@@ -333,28 +360,28 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	quat4 ctrlq;
 	float airflow, aoa, L, pitch, yaw;
 
-	
+
 
 	#ifdef DEBUG_BIRD
-		if (b->id == DEBUG_BIRD) {		
+		if (b->id == DEBUG_BIRD) {
 			printf ("---- ADVANCE START (GPU), id %d, #%d\n", b->id, i );
-			printf (" orient:  %f, %f, %f, %f\n", b->orient.x, b->orient.y, b->orient.z, b->orient.w );		
-			printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );		
+			printf (" orient:  %f, %f, %f, %f\n", b->orient.x, b->orient.y, b->orient.z, b->orient.w );
+			printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );
 		}
 	#endif
 
 	//-------------- BEHAVIORS
 	//
-	
+
 	b->clr = make_float4(0,0,0,0);
-	
+
 	ctrlq = quat_inverse ( b->orient );
 
   float3 center = make_float3(0,50,0);
 
 	if ( b->r_nbrs > 0 ) {
 
-		// Rule 1. Avoidance		
+		// Rule 1. Avoidance
 		// (Hoetzlein, orientation-based avoidance, derived from Reynolds pos-based)
 		//
 		// 1a. Side neighbor avoidance
@@ -372,16 +399,16 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 				pitch = asin( dirj.y ) * RADtoDEG;
 				dist = fmax( 1.0f, dist * dist );
 				b->target.z -= yaw *	 FParams.avoid_angular_amt / dist;
-				b->target.y -= pitch * FParams.avoid_angular_amt / dist;									
-			//}			
+				b->target.y -= pitch * FParams.avoid_angular_amt / dist;
+			//}
 
 			// Power adjust
-			L = length(b->vel - bj->vel) * FParams.avoid_power_amt;			
+			L = length(b->vel - bj->vel) * FParams.avoid_power_amt;
 			b->power = FParams.power - L * L;
 		}
 
 		if (b->power < FParams.min_power) b->power = FParams.min_power;
-		if (b->power > FParams.max_power) b->power = FParams.max_power;	
+		if (b->power > FParams.max_power) b->power = FParams.max_power;
 
 
 		// Rule 2. Alignment
@@ -400,19 +427,19 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 		yaw = atan2( dirj.z, dirj.x) * RADtoDEG;
 		pitch = asin( dirj.y ) * RADtoDEG;
 		b->target.z += yaw   * FParams.cohesion_amt;
-		b->target.y += pitch * FParams.cohesion_amt; 		
+		b->target.y += pitch * FParams.cohesion_amt;
 
 		// Rule 4. Boundary Term
-		// (Hoetzlein, new boundary term for periphery avoidance, 2023)	
-		if ( FParams.boundary_cnt > 0 && b->r_nbrs <  FParams.boundary_cnt ) { 
-			b->clr = make_float4(1, .5, 0, 1);	
+		// (Hoetzlein, new boundary term for periphery avoidance, 2023)
+		if ( FParams.boundary_cnt > 0 && b->r_nbrs <  FParams.boundary_cnt ) {
+			b->clr = make_float4(1, .5, 0, 1);
 			//dirj = quat_mult ( normalize ( FFlock.centroid - b->pos ), ctrlq );
 			dirj = quat_mult ( normalize ( center - b->pos ), ctrlq );
 			yaw = atan2( dirj.z, dirj.x )*RADtoDEG;
 			pitch = asin( dirj.y )*RADtoDEG;
 			float d = (FParams.boundary_cnt - b->r_nbrs ) / FParams.boundary_cnt;
 			b->target.z +=   yaw * FParams.boundary_amt * d;
-			b->target.y += pitch * FParams.boundary_amt * d;		
+			b->target.y += pitch * FParams.boundary_amt * d;
 		}
 
 		// Rule 5. Bird-Predators avoidance
@@ -420,22 +447,22 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 		/* Predator* p;
 		for (int m = 0; m < FParams.num_predators; m++) {
 
-			p = (Predator*) FPredators.data(FPREDATOR) + m;			
+			p = (Predator*) FPredators.data(FPREDATOR) + m;
 			float3 predatorDir = p->pos - b->pos;
 			float predatorDist = length ( predatorDir );
 
 			if (predatorDist < FParams.pred_radius) {
-				// Flee from predator							
+				// Flee from predator
 				predatorDir = quat_mult ( normalize ( predatorDir ), ctrlq );
 				yaw = atan2(predatorDir.z, predatorDir.x) * RADtoDEG;
 				pitch = asin(predatorDir.y) * RADtoDEG;
 				predatorDist = fmax(1.0f, fmin(predatorDist * predatorDist, 100.0f));
 				b->target.z -= yaw * FParams.avoid_pred_angular_amt; // / predatorDist;
 				b->target.y -= pitch * FParams.avoid_pred_angular_amt; // / predatorDist;
-				b->clr = make_float4(1, 0, 1, 1);				
+				b->clr = make_float4(1, 0, 1, 1);
 			}
-		}	 */ 
-	}	
+		}	 */
+	}
 
 	//-------------- FLIGHT MODEL
 
@@ -444,7 +471,7 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	up    = quat_mult ( make_float3(0,1,0), b->orient );
 	right = quat_mult ( make_float3(0,0,1), b->orient );
 
-	force = make_float3(0,0,0);	
+	force = make_float3(0,0,0);
 	b->thrust = make_float3(0,0,0);
 
 	// Direction of motion
@@ -470,9 +497,9 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	angs.z = fmodulus ( angs.z, 180.0 );
 	b->target.z = fmodulus ( b->target.z, 180 );
 	b->target.x = circleDelta ( b->target.z, angs.z ) * 0.5f;
-	b->target.y *= FParams.pitch_decay; 
+	b->target.y *= FParams.pitch_decay;
 	if ( b->target.y < FParams.pitch_min ) b->target.y = FParams.pitch_min;
-	if ( b->target.y > FParams.pitch_max ) b->target.y = FParams.pitch_max;	
+	if ( b->target.y > FParams.pitch_max ) b->target.y = FParams.pitch_max;
 	if ( fabs(b->target.y) < 0.0001) b->target.y = 0;
 
 	// Compute angular acceleration
@@ -488,64 +515,64 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	b->orient = quat_normalize ( quat_mult ( b->orient, ctrlq ) );
 
 	// Pitch & Yaw - Control inputs
-	// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs						
+	// - apply 'torque' by rotating the velocity vector based on pitch & yaw inputs
 	ctrlq = quat_from_angleaxis ( b->ang_accel.z * rx, up * -1.f );
-	vaxis = normalize ( quat_mult ( vaxis, ctrlq ) ); 
+	vaxis = normalize ( quat_mult ( vaxis, ctrlq ) );
 	ctrlq = quat_from_angleaxis ( b->ang_accel.y * rx, right );
 	vaxis = normalize ( quat_mult ( vaxis, ctrlq ) );
 
 	// Adjust velocity vector
 	b->vel = vaxis * b->speed;
 
-	// Compute off-axis angle from neighborhood average	
+	// Compute off-axis angle from neighborhood average
 	f3 v0, v1;
 	v0 = normalize ( b->vel );
 	v1 = normalize ( b->ave_vel );
-	ctrlq = quat_rotation_fromto ( v0, v1, 1.0 );	
+	ctrlq = quat_rotation_fromto ( v0, v1, 1.0 );
 	b->ang_offaxis = quat_to_euler ( ctrlq ) ;
 
-	// Dynamic pressure		
-	airflow = b->speed + dot ( FParams.wind, fwd*-1.0f );		// airflow = air over wing due to speed + external wind	
+	// Dynamic pressure
+	airflow = b->speed + dot ( FParams.wind, fwd*-1.0f );		// airflow = air over wing due to speed + external wind
 	float dynamic_pressure = 0.5f * FParams.air_density * airflow * airflow;
 
 	// Lift force
 	//-- dynamic CL
-	// aoa = acos( dot(fwd, vaxis) )*RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward		
- 	// if (isnan(aoa)) aoa = 1;	
+	// aoa = acos( dot(fwd, vaxis) )*RADtoDEG + 1;		// angle-of-attack = angle between velocity and body forward
+ 	// if (isnan(aoa)) aoa = 1;
 	// L = (sin( aoa * 0.1)+0.5) * dynamic_pressure * FParams.lift_factor * FParams.wing_area;		// lift equation. L = CL (1/2 p v^2) A
-	
+
 	//-- fixed CL
 	L = dynamic_pressure * FParams.lift_factor * FParams.wing_area;		// lift equation. L = CL (1/2 p v^2) A
 
 	b->lift = up * L;
-	force += b->lift;	
+	force += b->lift;
 
-	// Drag force	
+	// Drag force
 	b->drag = vaxis * dynamic_pressure * -FParams.drag_factor  * FParams.wing_area;			// drag equation. D = Cd (1/2 p v^2) A
-	force += b->drag; 
+	force += b->drag;
 
 	// Thrust force
 	b->thrust += fwd * b->power * FParams.power;
 	force += b->thrust;
-	
+
 	// Gravity force
 	b->gravity = FParams.gravity * FParams.mass;		// Fgrav = mg
-	force += b->gravity;	
+	force += b->gravity;
 
 	// Ground avoidance
 	L = b->pos.y - FAccel.bound_min.y;
-	if ( L < FParams.bound_soften ) {			
+	if ( L < FParams.bound_soften ) {
 		L = (FParams.bound_soften - L) / FParams.bound_soften;
 		//force.y += L * FParams.avoid_ground_amt;
-		b->target.y += L * FParams.avoid_ground_amt;		
-	} 
+		b->target.y += L * FParams.avoid_ground_amt;
+	}
 	// Ceiling avoidance
 	L = FAccel.bound_max.y - b->pos.y;
-	if ( L < FParams.bound_soften ) {	
+	if ( L < FParams.bound_soften ) {
 		L = (FParams.bound_soften - L) / FParams.bound_soften;
 		//force.y -= L * FParams.avoid_ground_amt;
-		b->target.y -= L * FParams.avoid_ceil_amt; 						
-	} 
+		b->target.y -= L * FParams.avoid_ceil_amt;
+	}
 
 	// Compute energy used (stats, read only)
 	// w = F . d											// Work is force applied over displacement
@@ -555,10 +582,10 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	b->Pdrag = length( b->drag ) * b->speed;			// drag is force against motion (profile + parasitic drag)
 	// compute force vector, after eliminating lift, drag, gravity
 	float Fresidual = length(force - b->lift - b->drag - b->gravity);
-	f3 delta_v = (force - b->lift - b->drag - b->gravity) * dt / FParams.mass;	
+	f3 delta_v = (force - b->lift - b->drag - b->gravity) * dt / FParams.mass;
 	float vdotv = dot ( delta_v, vaxis );
 	b->Pfwd = Fresidual * vdotv;															// energy for forward acceleration (beyond drag)
-	b->Pturn = Fresidual * length( delta_v - vdotv * vaxis );	 // energy for turning 
+	b->Pturn = Fresidual * length( delta_v - vdotv * vaxis );	 // energy for turning
 	// total energy/bird = lift + drag + fwd energy + turn energy
 	b->Ptotal = b->Plift + b->Pdrag + b->Pfwd + b->Pturn;
 
@@ -566,21 +593,21 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	//float cl = min( b->Pturn * 1000.0f, 1.0);
 	//b->clr = make_float4( 1-cl, cl, 0, 1);
 
-	// Integrate position		
-	accel = force / FParams.mass;						// body forces	
+	// Integrate position
+	accel = force / FParams.mass;						// body forces
 	accel += FParams.wind * FParams.air_density * FParams.front_area;				// wind force. Fw = w^2 p * A, where w=wind speed, p=air density, A=frontal area
-	
+
 	b->pos += b->vel * dt;
 
 	// Boundaries
 	if ( b->pos.x < FAccel.bound_min.x ) b->pos.x = FAccel.bound_max.x;
 	if ( b->pos.x > FAccel.bound_max.x ) b->pos.x = FAccel.bound_min.x;
 	if ( b->pos.z < FAccel.bound_min.z ) b->pos.z = FAccel.bound_max.z;
-	if ( b->pos.z > FAccel.bound_max.z ) b->pos.z = FAccel.bound_min.z;	
+	if ( b->pos.z > FAccel.bound_max.z ) b->pos.z = FAccel.bound_min.z;
 
 	// Integrate velocity
 	b->vel += accel * dt;
-	
+
 	vaxis = normalize( b->vel );
 
 	// Update Orientation
@@ -588,7 +615,7 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 	//  see: https://en.wikipedia.org/wiki/Directional_stability
 	// this is an assumption yet much simpler/faster than integrating body orientation
 	// this way we dont need torque, angular vel, or rotational inertia.
-	// stalls are possible but not flat spins or 3D flying		
+	// stalls are possible but not flat spins or 3D flying
 	ctrlq = quat_rotation_fromto ( fwd, vaxis, FParams.dynamic_stability  );
 	if ( !isnan(ctrlq.x) ) {
 		b->orient = quat_normalize( quat_mult ( b->orient, ctrlq ) );
@@ -599,16 +626,16 @@ extern "C" __global__ void advanceOrientationHoetzlein ( float time, float dt, f
 			printf ("---- ADVANCE END (GPU), id %d, #%d\n", b->id, i );
 			printf (" speed:   %f\n", b->speed );
 			printf (" airflow: %f\n", airflow );
-			printf (" orients: %f, %f, %f, %f\n", b->orient.x, b->orient.y, b->orient.z, b->orient.w );		
-			printf (" angs:    %f, %f, %f\n", angs.x, angs.y, angs.z );		
-			printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );		
+			printf (" orients: %f, %f, %f, %f\n", b->orient.x, b->orient.y, b->orient.z, b->orient.w );
+			printf (" angs:    %f, %f, %f\n", angs.x, angs.y, angs.z );
+			printf (" target:  %f, %f, %f\n", b->target.x, b->target.y, b->target.z );
 		}
 	#endif
 }
 
 extern "C" __global__ void advanceVectorsReynolds ( float time, float dt, float ss, int numPnts )
-{		
-	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index				
+{
+	uint i = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;	// particle index
 	if ( i >= numPnts ) return;
 
 	// Reynold's classic vector-based Boids
@@ -624,82 +651,82 @@ extern "C" __global__ void advanceVectorsReynolds ( float time, float dt, float 
 	b->clr = make_float4(0,0,0,0);			// default, visualize ang accel (w=0)
 
 	b->speed = length( b->vel );
-	
+
 	if ( b->r_nbrs > 0 ) {
-		
+
 		bj = ((Bird*) FBirds.data(FBIRD)) + b->near_j;
 
-		// Rule #1. Avoidance	(Reynolds position-based)		
+		// Rule #1. Avoidance	(Reynolds position-based)
 		dirj = b->ave_del;
 		force -= dirj * FParams.reynolds_avoidance;
-		/*if ( b->near_j != -1 ) {				
+		/*if ( b->near_j != -1 ) {
 			dirj = bj->pos - b->pos;
 			force -= dirj * FParams.reynolds_avoidance;
 		}*/
-	
-		// Rule #2. Alignment	(Reynolds position-based)			
+
+		// Rule #2. Alignment	(Reynolds position-based)
 		dirj = b->ave_vel - b->vel;
 		force += dirj * FParams.reynolds_alignment;
 
-		// Rule #3. Cohesion (Reynolds position-based)			
+		// Rule #3. Cohesion (Reynolds position-based)
 		dirj = b->ave_pos - b->pos;
 		force += dirj * FParams.reynolds_cohesion;
 	}
-	
+
 	// Gravity force
 	b->gravity = FParams.gravity * FParams.mass;		// Fgrav = mg
 	//force += b->gravity;
 	// Lift force - exactly equal to gravity in Reynold's model
 	//force -= b->gravity;
-	
+
 	// Integrate position	& velocity
-	accel = force / FParams.mass;						// body forces	
-	v0 = normalize ( b->vel );	
+	accel = force / FParams.mass;						// body forces
+	v0 = normalize ( b->vel );
 
 	// [stats only] Compute energy used
 	// w = F . d											// Work is force applied over displacement
 	// P = w/t												// Power is work divided by time
 	// P = W V												// from Pennycuick, where W = weight in Newtons = mg, V = velocity
 	// -- compute lift, does not affect Reynolds sim
-	float airflow = b->speed;			// airflow = air over wing due to speed + external wind	
-	float dynamic_pressure = 0.5f * FParams.air_density * airflow * airflow;	
+	float airflow = b->speed;			// airflow = air over wing due to speed + external wind
+	float dynamic_pressure = 0.5f * FParams.air_density * airflow * airflow;
 	// assume constant CL = 1.25
-	f3 vaxis = b->vel / b->speed;			// normalized direction of velocity 
-	float L = dynamic_pressure * FParams.lift_factor * FParams.wing_area;			// lift equation. L = CL (1/2 p v^2) A	
+	f3 vaxis = b->vel / b->speed;			// normalized direction of velocity
+	float L = dynamic_pressure * FParams.lift_factor * FParams.wing_area;			// lift equation. L = CL (1/2 p v^2) A
 	b->lift = make_float3(0,1,0) * L;
 	// -- compute drag, does not affect Reynolds sim
 	float D = dynamic_pressure * FParams.drag_factor  * FParams.wing_area;		// drag equation. D = Cd (1/2 p v^2) A
 	b->drag = vaxis * -D;
-	// -- compute gravity, does not affect Reynolds sim	
+	// -- compute gravity, does not affect Reynolds sim
 	b->gravity = FParams.gravity * FParams.mass;		// Fgrav = mg
 	// -- compute energies
 	b->Plift = L * b->speed;					// lift is force applied to move air downward
 	b->Pdrag = D * b->speed;					// drag is force against motion (profile + parasitic drag)
 	// compute force vector, after eliminating lift, drag, gravity
 	float Fresidual = length(force - b->lift - b->drag - b->gravity);
-	f3 delta_v = (force - b->lift - b->drag - b->gravity) * dt / FParams.mass;		
+	f3 delta_v = (force - b->lift - b->drag - b->gravity) * dt / FParams.mass;
 	float vdotv = dot ( delta_v, vaxis );
 	b->Pfwd = Fresidual * vdotv;															// energy for forward acceleration (beyond drag)
-	b->Pturn = Fresidual * length( delta_v - vdotv * vaxis );	 // energy for turning 
+	b->Pturn = Fresidual * length( delta_v - vdotv * vaxis );	 // energy for turning
 	// total energy/bird = lift + drag + fwd energy + turn energy
 	b->Ptotal = b->Plift + b->Pdrag + b->Pfwd + b->Pturn;
 
-	// [stats only] visualize turn energy	
+	// [stats only] visualize turn energy
 	// float cl = min( b->Pturn * 100.0f, 1.0);
-	// b->clr = make_float4( 1-cl, cl, 0, 1);	
+	// b->clr = make_float4( 1-cl, cl, 0, 1);
 
-	// Integrate position and velocity 
+	// Integrate position and velocity
 	b->vel += accel * dt;
 	b->pos += b->vel * dt;
 
 	// Speed limit
-	b->speed = length( b->vel );	
+	b->speed = length( b->vel );
 	if ( b->speed < FParams.min_speed) b->speed = FParams.min_speed;
 	if ( b->speed > FParams.max_speed) b->speed = FParams.max_speed;
 	b->vel = normalize(b->vel) * b->speed;
 
 	//b->vel.y *= 0.9999;
-	
+
 	// Orient the bird (for rendering)
 	b->orient = quat_from_directionup ( v0, make_float3(0,1,0) );
 
@@ -707,25 +734,25 @@ extern "C" __global__ void advanceVectorsReynolds ( float time, float dt, float 
 	if ( b->pos.x < FAccel.bound_min.x ) b->pos.x = FAccel.bound_max.x;
 	if ( b->pos.x > FAccel.bound_max.x ) b->pos.x = FAccel.bound_min.x;
 	if ( b->pos.z < FAccel.bound_min.z ) b->pos.z = FAccel.bound_max.z;
-	if ( b->pos.z > FAccel.bound_max.z ) b->pos.z = FAccel.bound_min.z;	
+	if ( b->pos.z > FAccel.bound_max.z ) b->pos.z = FAccel.bound_min.z;
 
 	if ( b->pos.y < FAccel.bound_min.y ) b->pos.y = FAccel.bound_max.y;
-	if ( b->pos.y > FAccel.bound_max.y ) b->pos.y = FAccel.bound_min.y;	
+	if ( b->pos.y > FAccel.bound_max.y ) b->pos.y = FAccel.bound_min.y;
 
-	// [stats only] Compute angular acceleration, does not affect sim	
+	// [stats only] Compute angular acceleration, does not affect sim
 	v1 = normalize ( b->vel );
-	q = quat_rotation_fromto ( v0, v1, 1.0 );	
+	q = quat_rotation_fromto ( v0, v1, 1.0 );
 	b->ang_accel = quat_to_euler ( q );
 
-	// [stats only] Compute angle from neighborhood average	
+	// [stats only] Compute angle from neighborhood average
 	v1 = normalize ( b->ave_vel );
-	q = quat_rotation_fromto ( v0, v1, 1.0 );	
+	q = quat_rotation_fromto ( v0, v1, 1.0 );
 	b->ang_offaxis = quat_to_euler ( q ) ;
 
 	#ifdef DEBUG_BIRD
 		if (b->id == DEBUG_BIRD) {
 			float aa = length ( b->ang_accel );
-			printf ("---- ADVANCE END (GPU), id %d, #%d\n", b->id, i );			
+			printf ("---- ADVANCE END (GPU), id %d, #%d\n", b->id, i );
 			printf (" force:     %f, %f, %f\n", force.x, force.y, force.z);
 			printf (" ang_accel: %f\n", aa );
 		}
@@ -778,4 +805,3 @@ extern "C" __global__ void prefixSum(uint* input, uint* output, uint* aux, int l
 		if (aux) aux[blockIdx.x] = scan_array[2 * SCAN_BLOCKSIZE - 1];
 	}
 }
-
