@@ -165,9 +165,11 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 			dist = ( bj->pos - bi->pos );
 			dsq = (dist.x*dist.x + dist.y*dist.y + dist.z*dist.z);
 
-			if ( dsq < rc && bi->cluster_nbr_cnt < 128 ) { // bird is closer than cluster threshold
-				bi->cluster_nbrs[bi->cluster_nbr_cnt] = j;
-				bi->cluster_nbr_cnt++;
+			if ( dsq < rc ) { // bird is closer than cluster threshold
+				if ( bi->cluster_nbr_cnt < CLUSTER_NBRS_MAX_ARRAY ) { // Does not matter, as there will be a high chance of any connection between clusters in high density areas
+					bi->cluster_nbrs[bi->cluster_nbr_cnt] = j;
+					bi->cluster_nbr_cnt++;
+				}
 			}
 
 			if ( dsq < rd2 ) {
@@ -224,14 +226,11 @@ extern "C" __global__ void findNeighborsTopological ( int pnum)
 		bi->ave_del *= (1.0f / sort_num );
 	}
 
-	/*for ( c=0; c < bi->cluster_nbr_cnt; c++) {
-		bj = ((Bird*) FBirds.data(FBIRD)) + j;
-		atomicCAS(&(bj->cluster_id), -1, bi->cluster_id);
-	}*/
-	//bi->cluster_id = i;
-	if(bi->cluster_nbr_cnt > 120)
+	/*
+	// Does not matter, as there will be a high chance of any connection between clusters in high density areas
+	if(bi->cluster_nbr_cnt > (CLUSTER_NBRS_MAX_ARRAY-1))
 		printf("High density: Bird %d has %d neighbors.\n", i, bi->cluster_nbr_cnt);
-//	printf("%d c %d\n", i, bi->cluster_id);
+	*/
 }
 
 extern "C" __global__ void findNeighbors ( int pnum)

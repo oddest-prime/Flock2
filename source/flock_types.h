@@ -41,6 +41,8 @@
 	#define KERNEL_FPREFIXFIXUP					6
 	#define KERNEL_MAX							7
 
+	#define CLUSTER_NBRS_MAX_ARRAY				128
+
 	#ifdef CUDA_KERNEL
 		#include "quaternion.cuh"
 		typedef float3			f3;
@@ -88,7 +90,7 @@
 		float		Plift, Pdrag, Pfwd, Pturn, Ptotal;
 
 		int			cluster_id;
-		uint		cluster_nbrs[128];
+		uint		cluster_nbrs[CLUSTER_NBRS_MAX_ARRAY];
 		uint		cluster_nbr_cnt;
 	};
 
