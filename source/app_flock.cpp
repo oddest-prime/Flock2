@@ -220,7 +220,9 @@ public:
 	int				m_draw_mesh;
 	bool			m_draw_grid;
 	bool			m_draw_origin;
+	bool			m_draw_help;
 	bool			m_draw_plot;
+	bool			m_calculate_clusters;
 	bool			m_kernels_loaded;
 	int				bird_index;
 	float			closest_bird;
@@ -1218,6 +1220,9 @@ void Flock2::AssignClusters ()
 			bi = (Bird*) m_Birds.GetElem( FBIRD, i);
 			bi->cluster_id = -1; // reset all cluster assignments
 		}
+
+		if(!m_calculate_clusters)
+			return;
 
 		// for each bird
 		for (int i=0; i < numPoints; i++) {
@@ -2559,10 +2564,7 @@ void Flock2::VisualizePredators ()
 		float dist = dirj.Length();
 		sprintf ( msg, "distance: %4.1f ", dist );
 		drawText ( Vec2F(10, 30 + 100 + 20*n), msg, tc );
-
-
 	}
-
 }
 
 void Flock2::VisualizeSelectedBird ()
@@ -2815,6 +2817,8 @@ bool Flock2::init ()
 	m_draw_mesh = 0;
 	m_draw_grid = false;
 	m_draw_origin = false;
+	m_draw_help = false;
+	m_calculate_clusters = true;
 	m_cam_mode = 0;
 
 	m_rec_start = 1000;
@@ -3182,6 +3186,30 @@ void Flock2::drawBackground ()
 		drawFill(Vec2F(0, 0), Vec2F(w, h), Vec4F(1, 0, 0, 1));
 		break;
 	};
+
+	// Draw help text
+	if (m_draw_help) {
+		char msg[1024];
+		Vec4F tc (1,1,1,1);
+		drawText ( Vec2F(10, h - 500), "Help", tc );
+		drawText ( Vec2F(10, h - 500 +  20), "ESC: quit", tc );
+		drawText ( Vec2F(10, h - 500 +  40), "Space: pause/resume", tc );
+		drawText ( Vec2F(10, h - 500 +  60), "o: draw origin", tc );
+		drawText ( Vec2F(10, h - 500 +  80), "a: m_analysis", tc );
+		drawText ( Vec2F(10, h - 500 + 100), "m: m_method", tc );
+		drawText ( Vec2F(10, h - 500 + 120), "v: toggle visualization mode", tc );
+		drawText ( Vec2F(10, h - 500 + 140), "s: m_draw_mesh", tc );
+		drawText ( Vec2F(10, h - 500 + 160), "g: m_draw_grid", tc );
+		drawText ( Vec2F(10, h - 500 + 180), "o: m_draw_origin", tc );
+		drawText ( Vec2F(10, h - 500 + 200), "h: m_draw_help", tc );
+		drawText ( Vec2F(10, h - 500 + 220), "p: m_draw_plot", tc );
+		drawText ( Vec2F(10, h - 500 + 240), "l: calculate clusters on/off", tc );
+		drawText ( Vec2F(10, h - 500 + 260), "e: enable/disable predator", tc );
+		drawText ( Vec2F(10, h - 500 + 280), "c: m_cockpit_view", tc );
+		drawText ( Vec2F(10, h - 500 + 300), "r: Reset", tc );
+		drawText ( Vec2F(10, h - 500 + 320), "z: m_bird_sel--", tc );
+		drawText ( Vec2F(10, h - 500 + 340), "x: m_bird_sel++", tc );
+	}
 }
 
 void Flock2::display ()
@@ -3496,7 +3524,9 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 		break;
 	case 'g': m_draw_grid = !m_draw_grid; break;
 	case 'o': m_draw_origin = !m_draw_origin; break;
+	case 'h': m_draw_help = !m_draw_help; break;
 	case 'p': m_draw_plot = !m_draw_plot; break;
+	case 'l': m_calculate_clusters = !m_calculate_clusters; break;
 	case 'e': m_Params.num_predators = (m_Params.num_predators + 1 ) % 2 ; break;
 
 	case 'c':
@@ -3545,7 +3575,7 @@ void Flock2::startup ()
 	DefaultParams();
 
 	int w = 1920, h = 1080;
-	appStart ( "Flock2 (c) 2024 Hoetzlein", "Flock2", w, h, 4, 2, 16, false );
+	appStart ( "Flock2 (c) 2024 Hoetzlein - press H for help", "Flock2", w, h, 4, 2, 16, false );
 
 	// on_arg is called before init() to load scene and config parameters
 }
