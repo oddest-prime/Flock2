@@ -1443,6 +1443,8 @@ void Flock2::UpdateFlockData ()
 	float speed = 0;
 	float plift = 0, pdrag = 0;
 	float pfwd = 0, pturn=0, ptotal = 0;
+	Vec3F flock_centers[MAX_FLOCKS] {{0,0,0}};
+	int order_n;
 
 	// compute centroid & energy of birds
 	Bird* b;
@@ -1462,9 +1464,15 @@ void Flock2::UpdateFlockData ()
 			pfwd  += b->Pfwd;
 			pturn += b->Pturn;
 			ptotal += b->Ptotal;
+
+			order_n = cluster_order.at(b->cluster_id);
+			if(order_n < MAX_FLOCKS)
+				flock_centers[order_n] += b->pos;
 		}
 	}
 	centroid *= (1.0f / m_Params.num_birds);
+	for (int i=0; i < MAX_FLOCKS; i++)
+		flock_centers[i] /= cluster_histogram.at(i).bird_cnt;
 
 	m_Flock.centroid = centroid;
 	m_Flock.speed = speed / m_Params.num_birds;
@@ -1473,6 +1481,8 @@ void Flock2::UpdateFlockData ()
 	m_Flock.Pfwd =  pfwd / m_Params.num_birds;
 	m_Flock.Pturn = pturn / m_Params.num_birds;
 	m_Flock.Ptotal = ptotal / m_Params.num_birds;
+	for (int i=0; i < MAX_FLOCKS; i++)
+		m_Flock.flock_centers[i] = flock_centers[i];
 
 	if ( m_frame > m_start_frame ) {
 		if ( m_frame % 8 == 0 ) {
@@ -2273,7 +2283,8 @@ void Flock2::Advance_pred()
 			if (p->currentState == HOVER) {
 				//printf("current state = HOVER\n");
 
-				dirj = m_Flock.centroid - p->pos;
+				// dirj = m_Flock.centroid - p->pos;
+				dirj = m_Flock.flock_centers[0] - p->pos;
 				dist = dirj.Length();
 				dirj.Normalize();
 				dirj *= p->orient.inverse();
@@ -2291,7 +2302,8 @@ void Flock2::Advance_pred()
 			}
 			else if (p->currentState == ATTACK) {
 				//printf("current state = ATTACK\n");
-				dirj = m_Flock.centroid - p->pos;
+				// dirj = m_Flock.centroid - p->pos;
+				dirj = m_Flock.flock_centers[0] - p->pos;
 				dist = dirj.Length();
 				dirj.Normalize();
 				dirj *= p->orient.inverse();
@@ -3303,8 +3315,15 @@ void Flock2::display ()
 
 			// Draw centroid
 			if (m_visualize == VISUALIZE_INFOVIS || m_visualize == VISUALIZE_CLUSTERS) {
-				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
-				drawCircle3D(m_Flock.centroid, 1.5, Vec4F(Vec4F(0.804, 0.961, 0.008, 1)));
+				drawCircle3D(m_Flock.centroid, 0.5, Vec4F(Vec4F(0.8, 1.0, 0.0, 1)));
+				drawCircle3D(m_Flock.centroid, 1.5, Vec4F(Vec4F(0.8, 1.0, 0.0, 1)));
+
+				for (int i=0; i < MAX_FLOCKS; i++) {
+	  			  	if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color) {
+						drawCircle3D(m_Flock.flock_centers[i], 0.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
+						drawCircle3D(m_Flock.flock_centers[i], 1.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
+					}
+				}
 			}
 
 			RenderBirdsWithDart ();

@@ -15,7 +15,7 @@
 	#define FGCELL_pred     4
 	#define FGNDX_pred      6
 
-	#define MAX_FLOCKS		50
+	#define MAX_FLOCKS		16
 
 	// Acceleration grid data
 	#define AGRID			0
