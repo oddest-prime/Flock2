@@ -154,6 +154,7 @@ public:
 	void			Graph ( int id, float y, Vec4F clr, Vec2F scal );
 	void			VisualizeSelectedBird ();
 	void			VisualizePredators ();
+	void			VisualizeClusters ();
 	void			DebugBird ( int id, std::string msg );
 	void			CameraToBird ( int b );
 	void			CameraToCockpit( int b );
@@ -164,6 +165,7 @@ public:
 	void			SketchMesh ( int i );
 	void			RenderBirdsWithMesh( int i );
 	void			RenderBirdsWithDart();
+	Vec4F			GenerateColorN(int n, int max);
 
 	// Acceleration
 	void			InitializeGrid ();
@@ -216,11 +218,13 @@ public:
 	Vec3F			m_cam_fwd;
 	int				mouse_down;
 	int				m_bird_sel, m_bird_ndx;
+	int				m_cluster_sel;
 	bool			m_cockpit_view;
 	int				m_draw_mesh;
 	bool			m_draw_grid;
 	bool			m_draw_origin;
 	bool			m_draw_help;
+	bool			m_draw_clusters;
 	bool			m_draw_plot;
 	bool			m_calculate_clusters;
 	bool			m_kernels_loaded;
@@ -2689,6 +2693,40 @@ void Flock2::VisualizeSelectedBird ()
 
 }
 
+void Flock2::VisualizeClusters ()
+{
+	if(!m_draw_clusters)
+		return;
+
+	char msg[1024];
+	Vec4F tc (1,1,1,1);
+	Vec4F clr;
+
+	// cluster information
+	sprintf ( msg, "cl."); drawText ( Vec2F(400, 30), msg, tc );
+	sprintf ( msg, "cnt"); drawText ( Vec2F(430, 30), msg, tc );
+	sprintf ( msg, "centroid (x/y/z)"); drawText ( Vec2F(460, 30), msg, tc );
+	for (int i=0; i < MAX_FLOCKS; i++) {
+		if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color) {
+			clr = GenerateColorN(i, 10);
+
+			sprintf ( msg, ">"); drawText ( Vec2F(380, 50 + 20*i), msg, clr );
+			sprintf ( msg, "%d", i ); drawText ( Vec2F(400, 50 + 20*i), msg, tc );
+			sprintf ( msg, "%d", cluster_histogram.at(i).bird_cnt ); drawText ( Vec2F(430, 50 + 20*i), msg, tc );
+			sprintf ( msg, " %.1f, %.1f, %.1f", m_Flock.flock_centers[i].x, m_Flock.flock_centers[i].y, m_Flock.flock_centers[i].z); drawText ( Vec2F(460, 50 + 20*i), msg, tc );
+			if(i == m_cluster_sel)
+			{
+				sprintf ( msg, "#"); drawText ( Vec2F(380, 50 + 20*i), msg, clr );
+			}
+
+//			drawCircle3D(m_Flock.flock_centers[i], 0.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
+//			drawCircle3D(m_Flock.flock_centers[i], 1.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
+		}
+	}
+
+
+}
+
 
 // Run
 // run a single time step
@@ -2830,6 +2868,7 @@ bool Flock2::init ()
 	m_draw_grid = false;
 	m_draw_origin = false;
 	m_draw_help = false;
+	m_draw_clusters = true;
 	m_calculate_clusters = true;
 	m_cam_mode = 0;
 
@@ -2868,6 +2907,7 @@ bool Flock2::init ()
 	m_kernels_loaded = false;
 
 	m_bird_sel = -1;
+	m_cluster_sel = -1;
 
 	init2D ( "arial" );		 // loads the arial.tga font file
 
@@ -3082,7 +3122,7 @@ void Flock2::RenderBirdsWithMesh (int i)
 }
 
 // taken from https://stackoverflow.com/questions/470690/how-to-automatically-generate-n-distinct-colors
-Vec4F GenerateColorN(int n, int max) {
+Vec4F Flock2::GenerateColorN(int n, int max) {
 	float x = (float)n / (float)max;
 
     float r = 0.0f;
@@ -3146,7 +3186,12 @@ void Flock2::RenderBirdsWithDart ()
 			  //printf("draw cluster_id %d, order_n %d, bird_cnt %d \n", b->cluster_id, order_n, bird_cnt);
 			  //if(order_n < 10)
 			  if(bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color)
-				  clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
+			  {
+				  if(order_n == m_cluster_sel) // highlight selected cluster birds
+				  	clr = Vec4F(1.0, 0.0, 0.0, 1);
+				  else
+				  	clr = GenerateColorN(order_n, 10); // Vec4F(1, 0, 0, 1);
+			  }
 			  else
 				  clr = Vec4F(0.9, 0.9, 0.9, 1);
 	          }
@@ -3214,14 +3259,18 @@ void Flock2::drawBackground ()
 		drawText ( Vec2F(10, h - 500 + 160), "g: m_draw_grid", tc );
 		drawText ( Vec2F(10, h - 500 + 180), "o: m_draw_origin", tc );
 		drawText ( Vec2F(10, h - 500 + 200), "h: m_draw_help", tc );
-		drawText ( Vec2F(10, h - 500 + 220), "p: m_draw_plot", tc );
-		drawText ( Vec2F(10, h - 500 + 240), "l: calculate clusters on/off", tc );
-		drawText ( Vec2F(10, h - 500 + 260), "e: enable/disable predator", tc );
-		drawText ( Vec2F(10, h - 500 + 280), "c: m_cockpit_view", tc );
-		drawText ( Vec2F(10, h - 500 + 300), "r: Reset", tc );
-		drawText ( Vec2F(10, h - 500 + 320), "z: m_bird_sel--", tc );
-		drawText ( Vec2F(10, h - 500 + 340), "x: m_bird_sel++", tc );
-		drawText ( Vec2F(10, h - 500 + 360), "n: no m_bird_sel", tc );
+		drawText ( Vec2F(10, h - 500 + 220), "i: m_draw_clusters", tc );
+		drawText ( Vec2F(10, h - 500 + 240), "p: m_draw_plot", tc );
+		drawText ( Vec2F(10, h - 500 + 260), "w: calculate clusters on/off", tc );
+		drawText ( Vec2F(10, h - 500 + 280), "e: enable/disable predator", tc );
+		drawText ( Vec2F(10, h - 500 + 300), "c: m_cockpit_view", tc );
+		drawText ( Vec2F(10, h - 500 + 320), "r: Reset", tc );
+		drawText ( Vec2F(10, h - 500 + 340), "z: m_bird_sel--", tc );
+		drawText ( Vec2F(10, h - 500 + 360), "x: m_bird_sel++", tc );
+		drawText ( Vec2F(10, h - 500 + 380), "n: no m_bird_sel", tc );
+		drawText ( Vec2F(10, h - 500 + 400), "j: m_cluster_sel--", tc );
+		drawText ( Vec2F(10, h - 500 + 420), "k: m_cluster_sel++", tc );
+		drawText ( Vec2F(10, h - 500 + 440), "l: no m_cluster_sel", tc );
 	}
 }
 
@@ -3323,6 +3372,8 @@ void Flock2::display ()
 	  			  	if(cluster_histogram.at(i).bird_cnt > m_Params.num_birds * m_Params.cluster_minsize_color) {
 						drawCircle3D(m_Flock.flock_centers[i], 0.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
 						drawCircle3D(m_Flock.flock_centers[i], 1.5, Vec4F(Vec4F(1.0, 0.8, 0.0, 1)));
+						if(i == m_cluster_sel) // highlight selected cluster centroid
+							drawCircle3D(m_Flock.flock_centers[i], 1.65, Vec4F(Vec4F(1.0, 0.0, 0.0, 1)));
 					}
 				}
 			}
@@ -3363,6 +3414,9 @@ void Flock2::display ()
 
 		// Visualize predators
 		VisualizePredators ();
+
+		// Visualize clusters (Text block only)
+		VisualizeClusters ();
 
 		setTextSz ( 16, 0 );
 
@@ -3545,8 +3599,9 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 	case 'g': m_draw_grid = !m_draw_grid; break;
 	case 'o': m_draw_origin = !m_draw_origin; break;
 	case 'h': m_draw_help = !m_draw_help; break;
+	case 'i': m_draw_clusters = !m_draw_clusters; break;
 	case 'p': m_draw_plot = !m_draw_plot; break;
-	case 'l': m_calculate_clusters = !m_calculate_clusters; break;
+	case 'w': m_calculate_clusters = !m_calculate_clusters; break;
 	case 'e': m_Params.num_predators = (m_Params.num_predators + 1 ) % 2 ; break;
 
 	case 'c':
@@ -3565,6 +3620,17 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 		break;
 	case 'n':
 		m_bird_sel = -1;
+		break;
+	case 'j':
+		m_cluster_sel--;
+		if (m_cluster_sel < 0) m_cluster_sel = 0;
+		break;
+	case 'k':
+		m_cluster_sel++;
+		if (m_cluster_sel > MAX_FLOCKS) m_cluster_sel = MAX_FLOCKS;
+		break;
+	case 'l':
+		m_cluster_sel = -1;
 		break;
 	};
 	// printf ( "%d \n", m_bird_sel );
