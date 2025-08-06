@@ -391,7 +391,7 @@ void Flock2::DefaultParams ()
 	// SI units:
 	// vel = m/s, accel = m/s^2, mass = kg, thrust(power) = N (kg m/s^2)
 	//
-	m_Params.num_birds = 10000; // 	10000
+	m_Params.num_birds = 1000; // 	10000
 	m_Params.num_predators = 1; //	0
 	m_Params.neighbors = 7;
 
@@ -3221,6 +3221,7 @@ void Flock2::drawBackground ()
 		drawText ( Vec2F(10, h - 500 + 300), "r: Reset", tc );
 		drawText ( Vec2F(10, h - 500 + 320), "z: m_bird_sel--", tc );
 		drawText ( Vec2F(10, h - 500 + 340), "x: m_bird_sel++", tc );
+		drawText ( Vec2F(10, h - 500 + 360), "n: no m_bird_sel", tc );
 	}
 }
 
@@ -3561,6 +3562,9 @@ void Flock2::keyboard(int keycode, AppEnum action, int mods, int x, int y)
 	case 'x':
 		m_bird_sel++;
 		if (m_bird_sel > m_Birds.GetNumElem(FBIRD)) m_bird_sel = m_Birds.GetNumElem(FBIRD)-1;
+		break;
+	case 'n':
+		m_bird_sel = -1;
 		break;
 	};
 	// printf ( "%d \n", m_bird_sel );
